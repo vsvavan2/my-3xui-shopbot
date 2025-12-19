@@ -132,9 +132,9 @@
 2) Выполните:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/tweopi/3xui-shopbot/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/vsvavan2/my-3xui-shopbot/blob/main/install.sh | sudo bash
 ```
-
+https://github.com/vsvavan2/my-3xui-shopbot/blob/main/install.sh
 3) Следуйте инструкциям установщика:
 
 - Введите домен (например, `shop.example.com`).
