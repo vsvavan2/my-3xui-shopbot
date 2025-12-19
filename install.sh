@@ -19,8 +19,8 @@ read_input_yn() {
     echo
 }
 
-REPO_URL="https://github.com/tweopi/3xui-shopbot.git"
-PROJECT_DIR="3xui-shopbot"
+REPO_URL="https://github.com/vsvavan2/my-3xui-shopbot.git"
+PROJECT_DIR="my-3xui-shopbot"
 NGINX_CONF_FILE="/etc/nginx/sites-available/${PROJECT_DIR}.conf"
 
 echo -e "${GREEN}--- Запуск скрипта установки/обновления 3xui-ShopBot ---${NC}"
