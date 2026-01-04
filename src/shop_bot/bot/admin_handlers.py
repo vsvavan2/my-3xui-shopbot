@@ -48,7 +48,6 @@ from shop_bot.data_manager.database import (
     get_promo_code,
 )
 from shop_bot.data_manager import backup_manager
-from shop_bot.bot.handlers import show_main_menu
 from shop_bot.modules.xui_api import create_or_update_key_on_host, delete_client_on_host
 
 logger = logging.getLogger(__name__)

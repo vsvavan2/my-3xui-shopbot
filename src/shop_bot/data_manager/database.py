@@ -1480,6 +1480,26 @@ def get_keys_for_user(user_id: int) -> list[dict]:
         logging.error(f"Не удалось get keys for user {user_id}: {e}")
         return []
 
+def create_user_key(user_id: int, host_name: str, xui_client_uuid: str, key_email: str, expiry_timestamp_ms: int) -> int | None:
+    try:
+        host_name = normalize_host_name(host_name)
+        expiry_date = datetime.fromtimestamp(expiry_timestamp_ms / 1000).isoformat()
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO vpn_keys (user_id, host_name, xui_client_uuid, key_email, expiry_date) VALUES (?, ?, ?, ?, ?)",
+                (user_id, host_name, xui_client_uuid, key_email, expiry_date)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    except sqlite3.IntegrityError as e:
+        logging.error(f"Не удалось создать ключ для пользователя {user_id}: дублирующийся email {key_email}: {e}")
+        return None
+    except sqlite3.Error as e:
+        logging.error(f"Не удалось создать ключ для пользователя {user_id}: {e}")
+        return None
+
+
 def get_key_by_id(key_id: int) -> dict | None:
     try:
         with sqlite3.connect(DB_FILE) as conn:
@@ -1532,7 +1552,7 @@ def create_gift_key(user_id: int, host_name: str, key_email: str, months: int, x
             )
             conn.commit()
             return cursor.lastrowid
-    except sqlite3.IntegrityОшибка as e:
+    except sqlite3.IntegrityError as e:
         logging.error(f"Не удалось создать подарочный ключ для пользователя {user_id}: дублирующийся email {key_email}: {e}")
         return None
     except sqlite3.Error as e:
@@ -3075,3 +3095,19 @@ def get_metrics_series(scope: str, object_name: str, *, since_hours: int = 24, l
     except sqlite3.Error as e:
         logging.error("Не удалось get metrics series for %s/%s: %s", scope, object_name, e)
         return []
+
+def get_transaction_by_payment_id(payment_id: str) -> dict | None:
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM transactions WHERE payment_id = ?", (payment_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    except sqlite3.Error as e:
+        logging.error(f"Не удалось get transaction by payment_id {payment_id}: {e}")
+        return None
+
+def get_host_by_name(host_name: str) -> dict | None:
+    return get_host(host_name)
+

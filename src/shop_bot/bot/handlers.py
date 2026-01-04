@@ -671,3 +671,7 @@ def _build_enot_url(shop_id: str, secret_key: str, amount: float, order_id: str)
         "s": sign
     })
     return f"https://enot.io/pay/{shop_id}?{qs}"
+
+def get_user_router() -> Router:
+    return user_router
+

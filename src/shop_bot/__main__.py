@@ -2,6 +2,7 @@ import logging
 import threading
 import asyncio
 import signal
+import sys
 import re
 try:
     # Helps show ANSI colors on Windows terminals and some TTY-less streams
@@ -125,8 +126,9 @@ def main():
         bot_controller.set_loop(loop)
         flask_app.config['EVENT_LOOP'] = loop
         
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, lambda sig=sig: asyncio.create_task(shutdown(sig, loop)))
+        if sys.platform != 'win32':
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(sig, lambda sig=sig: asyncio.create_task(shutdown(sig, loop)))
         
         flask_thread = threading.Thread(
             target=lambda: flask_app.run(host='0.0.0.0', port=1488, use_reloader=False, debug=False),
