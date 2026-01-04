@@ -1306,6 +1306,22 @@ def update_transaction_status(payment_id: str, status: str, amount_rub: float = 
         logging.error(f"Ошибка обновления статуса транзакции {payment_id}: {e}")
         return False
 
+def update_user_balance(user_id: int, amount: float) -> float:
+    """Обновляет баланс пользователя и возвращает новое значение."""
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET balance = balance + ? WHERE telegram_id = ?", (amount, user_id))
+            conn.commit()
+            
+            # Получаем обновленный баланс
+            cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (user_id,))
+            row = cursor.fetchone()
+            return row[0] if row else 0.0
+    except sqlite3.Error as e:
+        logging.error(f"Ошибка обновления баланса пользователя {user_id}: {e}")
+        return 0.0
+
 def insert_host_speedtest(
     host_name: str,
     method: str,
