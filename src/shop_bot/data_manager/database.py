@@ -1278,6 +1278,34 @@ def find_and_complete_pending_transaction(
         logging.error(f"Не удалось завершить ожидающую транзакцию {payment_id}: {e}")
         return None
 
+def update_transaction_status(payment_id: str, status: str, amount_rub: float = None, payment_method: str = None) -> bool:
+    """Обновить статус транзакции (например, на 'paid' или 'failed')."""
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            
+            # Строим динамический запрос
+            update_parts = ["status = ?"]
+            params = [status]
+            
+            if amount_rub is not None:
+                update_parts.append("amount_rub = ?")
+                params.append(amount_rub)
+            
+            if payment_method is not None:
+                update_parts.append("payment_method = ?")
+                params.append(payment_method)
+            
+            params.append(payment_id)
+            
+            query = f"UPDATE transactions SET {', '.join(update_parts)} WHERE payment_id = ?"
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logging.error(f"Ошибка обновления статуса транзакции {payment_id}: {e}")
+        return False
+
 def insert_host_speedtest(
     host_name: str,
     method: str,
