@@ -467,6 +467,23 @@ def check_promo_code_available(code: str, user_id: int) -> tuple[dict | None, st
         return None, "db_error"
 
 
+def use_promo_code(user_id: int, code: str) -> dict | None:
+    """
+    Применяет промокод для пользователя.
+    Возвращает словарь с результатом (discount_amount, discount_percent и т.д.) или None при ошибке.
+    Это обертка над check_promo_code_available и логикой применения.
+    """
+    promo, error = check_promo_code_available(code, user_id)
+    if error or not promo:
+        return None
+    
+    # Здесь можно добавить логику записи использования промокода, если это необходимо
+    # Например:
+    # record_promo_usage(code, user_id)
+    
+    return promo
+
+
 def update_promo_code_status(code: str, *, is_active: bool | None = None) -> bool:
     code_s = (code or "").strip().upper()
     if not code_s:
@@ -1482,7 +1499,7 @@ def update_key_email(key_id: int, new_email: str) -> bool:
             cursor.execute("UPDATE vpn_keys SET key_email = ? WHERE key_id = ?", (new_email, key_id))
             conn.commit()
             return cursor.rowcount > 0
-    except sqlite3.IntegrityОшибка as e:
+    except sqlite3.IntegrityError as e:
         logging.error(f"Нарушение уникальности email для ключа {key_id}: {e}")
         return False
     except sqlite3.Error as e:
@@ -2229,6 +2246,7 @@ def get_recent_transactions(limit: int = 15) -> list[dict]:
                 LIMIT ?;
             """
             cursor.execute(query, (limit,))
+            transactions = [dict(row) for row in cursor.fetchall()]
     except sqlite3.Error as e:
         logging.error(f"Не удалось get recent transactions: {e}")
     return transactions
