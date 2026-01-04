@@ -108,40 +108,40 @@ class BotController:
             stars_flag = database.get_setting("stars_enabled")
             stars_enabled = str(stars_flag).lower() in ("true", "1", "yes", "on")
             # YooMoney (отдельная платёжка)
-        ym_flag = database.get_setting("yoomoney_enabled")
-        ym_wallet = database.get_setting("yoomoney_wallet")
-        yoomoney_enabled = (str(ym_flag).lower() in ("true", "1", "yes", "on")) and bool(ym_wallet)
+            ym_flag = database.get_setting("yoomoney_enabled")
+            ym_wallet = database.get_setting("yoomoney_wallet")
+            yoomoney_enabled = (str(ym_flag).lower() in ("true", "1", "yes", "on")) and bool(ym_wallet)
 
-        # Unitpay
-        unitpay_flag = database.get_setting("unitpay_enabled")
-        unitpay_public = database.get_setting("unitpay_public_key")
-        unitpay_enabled = (str(unitpay_flag).lower() in ("true", "1", "yes", "on")) and bool(unitpay_public)
+            # Unitpay
+            unitpay_flag = database.get_setting("unitpay_enabled")
+            unitpay_public = database.get_setting("unitpay_public_key")
+            unitpay_enabled = (str(unitpay_flag).lower() in ("true", "1", "yes", "on")) and bool(unitpay_public)
 
-        # Freekassa
-        freekassa_flag = database.get_setting("freekassa_enabled")
-        freekassa_shop = database.get_setting("freekassa_shop_id")
-        freekassa_enabled = (str(freekassa_flag).lower() in ("true", "1", "yes", "on")) and bool(freekassa_shop)
+            # Freekassa
+            freekassa_flag = database.get_setting("freekassa_enabled")
+            freekassa_shop = database.get_setting("freekassa_shop_id")
+            freekassa_enabled = (str(freekassa_flag).lower() in ("true", "1", "yes", "on")) and bool(freekassa_shop)
 
-        # Enot.io
-        enot_flag = database.get_setting("enot_enabled")
-        enot_shop = database.get_setting("enot_shop_id")
-        enot_enabled = (str(enot_flag).lower() in ("true", "1", "yes", "on")) and bool(enot_shop)
+            # Enot.io
+            enot_flag = database.get_setting("enot_enabled")
+            enot_shop = database.get_setting("enot_shop_id")
+            enot_enabled = (str(enot_flag).lower() in ("true", "1", "yes", "on")) and bool(enot_shop)
 
-        if yookassa_enabled:
-            Configuration.account_id = yookassa_shop_id
-            Configuration.secret_key = yookassa_secret_key
-        
-        handlers.PAYMENT_METHODS = {
-            "yookassa": yookassa_enabled,
-            "heleket": heleket_enabled,
-            "cryptobot": cryptobot_enabled,
-            "tonconnect": tonconnect_enabled,
-            "stars": stars_enabled,
-            "yoomoney": yoomoney_enabled,
-            "unitpay": unitpay_enabled,
-            "freekassa": freekassa_enabled,
-            "enot": enot_enabled,
-        }
+            if yookassa_enabled:
+                Configuration.account_id = yookassa_shop_id
+                Configuration.secret_key = yookassa_secret_key
+            
+            handlers.PAYMENT_METHODS = {
+                "yookassa": yookassa_enabled,
+                "heleket": heleket_enabled,
+                "cryptobot": cryptobot_enabled,
+                "tonconnect": tonconnect_enabled,
+                "stars": stars_enabled,
+                "yoomoney": yoomoney_enabled,
+                "unitpay": unitpay_enabled,
+                "freekassa": freekassa_enabled,
+                "enot": enot_enabled,
+            }
             handlers.TELEGRAM_BOT_USERNAME = bot_username
             handlers.ADMIN_ID = admin_id
 
