@@ -18,8 +18,10 @@ from shop_bot.data_manager.database import (
     update_transaction_status, update_user_balance,
     get_promo_code, use_promo_code, create_user_key, get_user_keys,
     get_transaction_by_payment_id, get_host_by_name, get_key_by_id, update_key_expiry,
-    register_user_if_not_exists, get_all_hosts, get_plans_for_host, mark_trial_used
+    register_user_if_not_exists, get_all_hosts, get_plans_for_host, mark_trial_used,
+    get_latest_speedtest
 )
+from shop_bot.data_manager import speedtest_runner
 from shop_bot.modules import xui_api
 from shop_bot.bot import keyboards
 from shop_bot.bot.states import PaymentProcess, TopUpProcess
@@ -556,7 +558,105 @@ async def show_referral_program(callback: types.CallbackQuery):
 
 @user_router.callback_query(F.data == "user_speedtest")
 async def run_user_speedtest(callback: types.CallbackQuery):
-    await callback.answer("Функция в разработке", show_alert=True)
+    try:
+        # Получаем список хостов
+        hosts = get_all_hosts() or []
+        if not hosts:
+            await callback.answer("⚠️ Хосты не найдены в настройках.", show_alert=True)
+            return
+        
+        # Показываем последние результаты тестов скорости для всех хостов
+        text = "⚡️ <b>Результаты Speedtest</b>\n"
+        text += "<i>Нажмите кнопку «Обновить», чтобы запустить новый тест (это может занять время).</i>\n\n"
+        
+        for host in hosts:
+            host_name = host.get('host_name', 'Неизвестный хост')
+            latest_test = get_latest_speedtest(host_name)
+            
+            if latest_test:
+                ping = latest_test.get('ping_ms')
+                download = latest_test.get('download_mbps')
+                upload = latest_test.get('upload_mbps')
+                method = latest_test.get('method', 'unknown').upper()
+                created_at = latest_test.get('created_at', '—')
+                
+                # Форматируем время
+                try:
+                    if created_at and created_at != '—':
+                        if isinstance(created_at, str):
+                            dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        else:
+                            dt = created_at
+                        time_str = dt.strftime('%d.%m %H:%M')
+                    else:
+                        time_str = '—'
+                except Exception:
+                    time_str = str(created_at)
+                
+                # Форматируем значения
+                ping_str = f"{ping:.2f}" if ping is not None else "—"
+                download_str = f"{download:.0f}" if download is not None else "—"
+                upload_str = f"{upload:.0f}" if upload is not None else "—"
+                
+                text += f"• 🌏 <b>{host_name}</b> ({method})\n"
+                text += f"   ✅ Ping: {ping_str} ms\n"
+                text += f"   ⬇️ Download: {download_str} Mbps\n"
+                text += f"   ⬆️ Upload: {upload_str} Mbps\n"
+                text += f"   🕒 {time_str}\n\n"
+            else:
+                text += f"• 🌏 <b>{host_name}</b> — Нет данных\n\n"
+        
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🔄 Обновить", callback_data="refresh_speedtest")
+        builder.button(text="🔙 Назад", callback_data="main_menu")
+        builder.adjust(1)
+        
+        # Если это callback от кнопки "Обновить", редактируем сообщение, иначе отправляем/редактируем
+        if callback.message:
+            await callback.message.edit_text(
+                text,
+                reply_markup=builder.as_markup(),
+                disable_web_page_preview=True,
+                parse_mode="HTML"
+            )
+        else:
+            await callback.answer(text, show_alert=True) # Fallback if something weird happens
+
+    except Exception as e:
+        logger.error(f"Error in user_speedtest: {e}")
+        await callback.answer("Произошла ошибка при получении данных.", show_alert=True)
+
+
+@user_router.callback_query(F.data == "refresh_speedtest")
+async def refresh_speedtest_handler(callback: types.CallbackQuery):
+    await callback.answer("⏳ Запускаем тесты скорости... Это может занять 1-2 минуты.", show_alert=True)
+    
+    try:
+        hosts = get_all_hosts() or []
+        if not hosts:
+            return
+
+        # Запускаем тесты для всех хостов
+        # Лучше делать это асинхронно, но здесь мы просто подождем
+        # В идеале нужно использовать background task, но для простоты сделаем await
+        for host in hosts:
+            host_name = host.get('host_name')
+            if host_name:
+                try:
+                    # Используем run_both_for_host из speedtest_runner
+                    # Оборачиваем в timeout чтобы не висело вечно
+                    async with asyncio.timeout(60):
+                        await speedtest_runner.run_both_for_host(host_name)
+                except Exception as e:
+                    logger.error(f"Manual speedtest failed for {host_name}: {e}")
+        
+        # После завершения вызываем отображение результатов
+        await run_user_speedtest(callback)
+        
+    except Exception as e:
+        logger.error(f"Error in refresh_speedtest: {e}")
+        await callback.message.answer("Произошла ошибка при обновлении данных.")
+
 
 PAYMENT_METHODS = {}
 
