@@ -16,11 +16,32 @@ logger = logging.getLogger(__name__)
 
 class BotController:
     def __init__(self):
-        self._dp = None
+        self._dp = Dispatcher()
         self._bot = None
         self._task = None
         self._is_running = False
         self._loop = None
+
+        # Инициализация роутеров и middleware один раз при создании контроллера
+        self._setup_dispatcher()
+
+    def _setup_dispatcher(self):
+        """Настройка диспетчера: middleware и роутеры"""
+        # Вешаем BanMiddleware на уровни событий, где доступен event_from_user
+        self._dp.message.middleware(BanMiddleware())
+        self._dp.callback_query.middleware(BanMiddleware())
+        
+        user_router = get_user_router()
+        admin_router = get_admin_router()
+
+        if not isinstance(user_router, Router):
+            raise TypeError(f"get_user_router() must return Router instance, got: {type(user_router)}")
+        if not isinstance(admin_router, Router):
+            raise TypeError(f"get_admin_router() must return Router instance, got: {type(admin_router)}")
+        
+        self._dp.include_router(user_router)
+        self._dp.include_router(admin_router)
+
 
     def set_loop(self, loop: asyncio.AbstractEventLoop):
         self._loop = loop
@@ -45,7 +66,7 @@ class BotController:
             if self._bot:
                 await self._bot.close()
             self._bot = None
-            self._dp = None
+            # self._dp = None  <-- Диспетчер не удаляем, чтобы не ломать привязку роутеров
 
     def start(self):
         if self._is_running:
@@ -66,23 +87,6 @@ class BotController:
 
         try:
             self._bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-            self._dp = Dispatcher()
-            
-            # Вешаем BanMiddleware на уровни событий, где доступен event_from_user
-            # Вместо уровня update, чтобы корректно отлавливать сообщения/колбэки забаненных пользователей
-            self._dp.message.middleware(BanMiddleware())
-            self._dp.callback_query.middleware(BanMiddleware())
-            
-            user_router = get_user_router()
-            admin_router = get_admin_router()
-
-            if not isinstance(user_router, Router):
-                raise TypeError(f"get_user_router() must return Router instance, got: {type(user_router)}")
-            if not isinstance(admin_router, Router):
-                raise TypeError(f"get_admin_router() must return Router instance, got: {type(admin_router)}")
-            
-            self._dp.include_router(user_router)
-            self._dp.include_router(admin_router)
             
             try:
                 asyncio.run_coroutine_threadsafe(self._bot.delete_webhook(drop_pending_updates=True), self._loop)
@@ -152,7 +156,7 @@ class BotController:
         except Exception as e:
             logger.error(f"Не удалось запустить бота: {e}", exc_info=True)
             self._bot = None
-            self._dp = None
+            # self._dp = None <-- Не удаляем диспетчер при ошибке старта
             return {"status": "error", "message": f"Ошибка при запуске: {e}"}
 
     def stop(self):
