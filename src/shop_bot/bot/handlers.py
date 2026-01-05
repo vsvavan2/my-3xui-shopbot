@@ -18,7 +18,7 @@ from shop_bot.data_manager.database import (
     update_transaction_status, update_user_balance,
     get_promo_code, use_promo_code, create_user_key, get_user_keys,
     get_transaction_by_payment_id, get_host_by_name, get_key_by_id, update_key_expiry,
-    register_user_if_not_exists, get_all_hosts, get_plans_for_host
+    register_user_if_not_exists, get_all_hosts, get_plans_for_host, mark_trial_used
 )
 from shop_bot.modules import xui_api
 from shop_bot.bot import keyboards
@@ -47,8 +47,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     # Регистрация пользователя (или обновление данных)
     register_user_if_not_exists(user.id, user.username, referrer_id)
     
-    # Приветствие
-    welcome_text = get_setting("welcome_message") or "Добро пожаловать в бот продажи VPN!"
+    welcome_text = get_setting("main_menu_text") or "Добро пожаловать в бот продажи VPN!"
     
     # Клавиатура
     keys = get_user_keys(user.id)
@@ -70,14 +69,71 @@ async def show_main_menu(callback: types.CallbackQuery, state: FSMContext):
     admin_id_str = get_setting("admin_telegram_id")
     is_admin = str(user_id) == str(admin_id_str)
     
-    welcome_text = get_setting("welcome_message") or "Главное меню:"
+    welcome_text = get_setting("main_menu_text") or "Главное меню:"
     kb = keyboards.create_main_menu_keyboard(keys, trial_enabled, is_admin)
     
-    # Пытаемся редактировать сообщение, если не получается (например, старое сообщение удалено) - отправляем новое
+    await callback.message.edit_text(welcome_text, reply_markup=kb)
+
+@user_router.callback_query(F.data == "get_trial")
+async def get_trial_handler(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    user = get_user(user_id)
+    
+    if user.get('trial_used'):
+        await callback.answer("Вы уже использовали пробный период!", show_alert=True)
+        return
+
+    trial_enabled = get_setting("trial_enabled") == "true"
+    if not trial_enabled:
+        await callback.answer("Пробный период отключен", show_alert=True)
+        return
+
+    hosts = get_all_hosts()
+    if not hosts:
+        await callback.answer("Нет доступных серверов для пробного периода", show_alert=True)
+        return
+
+    # Use the first host for trial
+    host = hosts[0]
+    days_str = get_setting("trial_duration_days")
     try:
-        await callback.message.edit_text(welcome_text, reply_markup=kb)
-    except Exception:
-        await callback.message.answer(welcome_text, reply_markup=kb)
+        days = int(days_str) if days_str else 3
+    except ValueError:
+        days = 3
+    
+    # Generate email
+    import random
+    import string
+    suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    email = f"trial_{user_id}_{suffix}"
+    
+    # Create key
+    await callback.message.edit_text("⏳ Создаем пробный ключ...")
+    
+    try:
+        client = await xui_api.create_or_update_key_on_host(host['host_name'], email, days_to_add=days)
+        
+        if client:
+            # Mark trial used
+            mark_trial_used(user_id)
+            
+            # Save to DB
+            create_user_key(user_id, host['host_name'], client['client_uuid'], email, client['expiry_timestamp_ms'])
+            
+            msg = (
+                f"🎁 <b>Ваш пробный ключ на {days} дн. готов!</b>\n\n"
+                f"<code>{client['connection_string']}</code>\n\n"
+                f"Инструкции по подключению в главном меню."
+            )
+            builder = InlineKeyboardBuilder()
+            builder.button(text="🔙 В меню", callback_data="main_menu")
+            await callback.message.edit_text(msg, reply_markup=builder.as_markup(), parse_mode="HTML")
+        else:
+            await callback.message.edit_text("❌ Ошибка при создании ключа. Попробуйте позже.")
+            
+    except Exception as e:
+        logger.error(f"Error creating trial key: {e}")
+        await callback.message.edit_text("❌ Произошла ошибка. Обратитесь в поддержку.")
 
 @user_router.callback_query(F.data == "show_profile")
 async def show_profile(callback: types.CallbackQuery):
@@ -118,7 +174,8 @@ async def start_buy_process(callback: types.CallbackQuery, state: FSMContext):
     for host in hosts:
         # Используем токен для callback_data
         token = keyboards.encode_host_callback_token(host['host_name'])
-        builder.button(text=host['host_name'], callback_data=f"select_host:buy:{token}")
+        # Добавляем пустой extra параметр для корректного парсинга (action:extra:token)
+        builder.button(text=host['host_name'], callback_data=f"select_host:buy::{token}")
     
     builder.button(text="🔙 Назад", callback_data="main_menu")
     builder.adjust(1)
@@ -210,7 +267,7 @@ async def show_payment_methods(callback: types.CallbackQuery, state: FSMContext)
     await state.set_state(PaymentProcess.waiting_for_payment_method)
     await callback.message.edit_text(
         f"💳 К оплате: <b>{price} RUB</b>\n"
-        f"Тариф: {plan['name']}\n"
+        f"Тариф: {plan['plan_name']}\n"
         f"Выберите способ оплаты:",
         reply_markup=builder.as_markup()
     )
@@ -292,12 +349,19 @@ async def process_top_up_amount(message: types.Message, state: FSMContext):
 
 @user_router.callback_query(F.data == "show_help")
 async def show_help(callback: types.CallbackQuery):
-    help_text = get_setting("help_text") or "По всем вопросам обращайтесь в поддержку."
+    help_text = get_setting("support_text") or (
+        "🆘 <b>Поддержка</b>\n\n"
+        "Если у вас возникли вопросы или проблемы при использовании сервиса, "
+        "пожалуйста, обратитесь в нашу службу поддержки."
+    )
     support_url = get_setting("support_url")
+    support_user = get_setting("support_user")
     
     builder = InlineKeyboardBuilder()
     if support_url:
         builder.button(text="Написать в поддержку", url=support_url)
+    elif support_user:
+        builder.button(text="Написать в поддержку", url=f"https://t.me/{support_user.lstrip('@')}")
     builder.button(text="🔙 Назад", callback_data="main_menu")
     builder.adjust(1)
     
@@ -305,49 +369,167 @@ async def show_help(callback: types.CallbackQuery):
 
 @user_router.callback_query(F.data == "show_about")
 async def show_about(callback: types.CallbackQuery):
-    about_text = get_setting("about_text") or "О сервисе..."
+    about_text = get_setting("about_text")
+    if not about_text:
+        about_text = (
+            "ℹ️ <b>О проекте</b>\n\n"
+            "Этот бот позволяет автоматически приобретать и управлять ключами доступа VLESS VPN. "
+            "Мы используем современные протоколы для обеспечения безопасности и скорости вашего соединения."
+        )
     builder = InlineKeyboardBuilder()
     builder.button(text="🔙 Назад", callback_data="main_menu")
     await callback.message.edit_text(about_text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 @user_router.callback_query(F.data == "howto_vless")
 async def show_howto(callback: types.CallbackQuery):
-    howto_text = get_setting("howto_text") or "Инструкция по подключению..."
+    text = (
+        "❓ <b>Как использовать</b>\n\n"
+        "Выберите вашу платформу, чтобы увидеть инструкцию."
+    )
     builder = InlineKeyboardBuilder()
+    builder.button(text=(get_setting("btn_howto_android") or "📱 Android"), callback_data="howto_android")
+    builder.button(text=(get_setting("btn_howto_ios") or "📱 iOS"), callback_data="howto_ios")
+    builder.button(text=(get_setting("btn_howto_windows") or "💻 Windows"), callback_data="howto_windows")
+    builder.button(text=(get_setting("btn_howto_linux") or "🐧 Linux"), callback_data="howto_linux")
     builder.button(text="🔙 Назад", callback_data="main_menu")
-    await callback.message.edit_text(howto_text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    builder.adjust(2, 2, 1)
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+@user_router.callback_query(F.data == "howto_android")
+async def show_howto_android(callback: types.CallbackQuery):
+    txt = get_setting("howto_android_text") or "Инструкция для Android скоро будет доступна."
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="howto_vless")
+    await callback.message.edit_text(txt, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+@user_router.callback_query(F.data == "howto_ios")
+async def show_howto_ios(callback: types.CallbackQuery):
+    txt = get_setting("howto_ios_text") or "Инструкция для iOS скоро будет доступна."
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="howto_vless")
+    await callback.message.edit_text(txt, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+@user_router.callback_query(F.data == "howto_windows")
+async def show_howto_windows(callback: types.CallbackQuery):
+    txt = get_setting("howto_windows_text") or "Инструкция для Windows скоро будет доступна."
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="howto_vless")
+    await callback.message.edit_text(txt, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+@user_router.callback_query(F.data == "howto_linux")
+async def show_howto_linux(callback: types.CallbackQuery):
+    txt = get_setting("howto_linux_text") or "Инструкция для Linux скоро будет доступна."
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="howto_vless")
+    await callback.message.edit_text(txt, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 @user_router.callback_query(F.data == "manage_keys")
 async def show_user_keys(callback: types.CallbackQuery):
     user_id = callback.from_user.id
-    keys = get_user_keys(user_id)
-    
-    if not keys:
-        await callback.answer("У вас пока нет активных ключей", show_alert=True)
-        return
+    try:
+        keys = get_user_keys(user_id)
         
-    for key in keys:
-        # Показываем информацию о ключе
-        # key: {'id', 'key_id', 'host_name', 'key_email', 'expiry_time', 'is_active', ...}
-        expiry = datetime.fromtimestamp(key['expiry_time']/1000).strftime('%Y-%m-%d %H:%M') if key.get('expiry_time') else "Бессрочно"
-        
-        text = (
-            f"🔑 <b>Ключ:</b> {key.get('key_email')}\n"
-            f"🌍 <b>Сервер:</b> {key.get('host_name')}\n"
-            f"⏳ <b>Истекает:</b> {expiry}\n"
-            f"🔗 <code>{key.get('access_url')}</code>" # Предполагаем, что access_url есть или надо генерировать
-        )
-        
+        if not keys:
+            await callback.answer("У вас пока нет активных ключей", show_alert=True)
+            return
+            
+        # Удаляем предыдущее сообщение с меню, чтобы не захламлять чат, или редактируем его
+        # Если ключей много, лучше отправить новые сообщения.
+        # Но если ключей 1-2, можно попробовать редактировать.
+        # Для простоты и надежности, отправим новые, но сначала удалим "старое" меню если получится
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+
+        for key in keys:
+            # Показываем информацию о ключе
+            # key: {'id', 'key_id', 'host_name', 'key_email', 'expiry_time', 'is_active', ...}
+            expiry_ts = key.get('expiry_time')
+            if expiry_ts:
+                expiry = datetime.fromtimestamp(expiry_ts/1000).strftime('%Y-%m-%d %H:%M')
+            else:
+                expiry = "Бессрочно"
+            
+            key_email = key.get('key_email', 'Unknown')
+            host_name = key.get('host_name', 'Unknown')
+            
+            connection_display = key.get('access_url')
+            if not connection_display:
+                try:
+                    details = await xui_api.get_key_details_from_host(key)
+                    if details and details.get('connection_string'):
+                        connection_display = details['connection_string']
+                except Exception:
+                    connection_display = None
+            text = (
+                f"🔑 <b>Ключ:</b> {key_email}\n"
+                f"🌍 <b>Сервер:</b> {host_name}\n"
+                f"⏳ <b>Истекает:</b> {expiry}\n"
+                f"🔗 <code>{connection_display or 'Ссылка недоступна'}</code>"
+            )
+            
+            builder = InlineKeyboardBuilder()
+            # ID ключа в базе данных (key['id']) используется для callback
+            builder.button(text="📅 Продлить", callback_data=f"renew_key:{key['id']}")
+            # Можно добавить кнопку "Инструкция" или "QR код"
+            
+            await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+            
+        # В конце можно добавить кнопку возврата в меню
         builder = InlineKeyboardBuilder()
-        builder.button(text="📅 Продлить", callback_data=f"renew_key:{key['id']}")
-        # Можно добавить кнопку "Инструкция" или "QR код"
+        builder.button(text="🔙 В меню", callback_data="main_menu")
+        await callback.message.answer("---", reply_markup=builder.as_markup())
         
-        await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-        
-    # В конце можно добавить кнопку возврата в меню
+    except Exception as e:
+        logger.error(f"Error in show_user_keys: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка при загрузке ключей", show_alert=True)
+
+@user_router.callback_query(F.data.startswith("renew_key:"))
+async def renew_key_handler(callback: types.CallbackQuery, state: FSMContext):
+    try:
+        key_id_str = callback.data.split(":")[1]
+        key_id = int(key_id_str)
+    except (ValueError, IndexError):
+        await callback.answer("Ошибка ID ключа", show_alert=True)
+        return
+
+    key_data = get_key_by_id(key_id)
+    if not key_data:
+        await callback.answer("Ключ не найден", show_alert=True)
+        return
+
+    # Сохраняем контекст продления
+    await state.update_data(
+        action="renew_key",
+        key_id=key_id,
+        host_name=key_data['host_name'],
+        customer_email=key_data['key_email']
+    )
+
+    # Получаем тарифы для хоста
+    plans = get_plans_for_host(key_data['host_name'])
+    if not plans:
+        await callback.answer("Нет доступных тарифов для продления", show_alert=True)
+        return
+
     builder = InlineKeyboardBuilder()
-    builder.button(text="🔙 В меню", callback_data="main_menu")
-    await callback.message.answer("---", reply_markup=builder.as_markup())
+    for plan in plans:
+        builder.button(
+            text=f"{plan['plan_name']} - {plan['price']}₽ ({plan['months']} мес.)",
+            callback_data=f"select_plan:{plan['plan_id']}"
+        )
+    
+    builder.button(text="🔙 Отмена", callback_data="main_menu")
+    builder.adjust(1)
+    
+    await callback.message.answer(
+        f"🔄 <b>Продление ключа:</b> {key_data['key_email']}\n"
+        f"Сервер: {key_data['host_name']}\n\n"
+        f"Выберите тариф:", 
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
 
 @user_router.callback_query(F.data == "show_referral_program")
 async def show_referral_program(callback: types.CallbackQuery):
@@ -378,12 +560,7 @@ async def run_user_speedtest(callback: types.CallbackQuery):
 
 PAYMENT_METHODS = {}
 
-class PaymentProcess(StatesGroup):
-    waiting_for_payment_method = State()
 
-class TopUpProcess(StatesGroup):
-    waiting_for_topup_amount = State()
-    waiting_for_topup_method = State()
 
 # --- Successful Payment Processor ---
 async def process_successful_payment(bot: Bot, metadata: dict):
@@ -451,22 +628,26 @@ async def process_successful_payment(bot: Bot, metadata: dict):
                     email = f"user_{user_id}_{suffix}"
                 
                 # Создаем ключ в панели
-                # Получаем данные хоста
-                # host = get_host_by_name(host_name) # Предполагаем наличие такой функции или берем из settings
-                # Для создания ключа используем xui_api
-                client = await xui_api.create_or_update_key_on_host(host_name, email, days_to_add=months*30)
+                # Используем create_or_update_key_on_host для создания
+                days = months * 30
+                client = await xui_api.create_or_update_key_on_host(
+                    host_name, 
+                    email, 
+                    days_to_add=days
+                )
                 
                 if client:
                     # Сохраняем в БД
+                    # create_or_update_key_on_host возвращает dict с client_uuid и expiry_timestamp_ms
                     create_user_key(user_id, host_name, client['client_uuid'], email, client['expiry_timestamp_ms'])
                     
                     # Отправляем ключ пользователю
                     msg = (
                         f"✅ Оплата прошла успешно!\n\n"
-                        f"Ваш ключ доступа:\n`{client['connection_string']}`\n\n"
+                        f"Ваш ключ доступа:\n<code>{client['connection_string']}</code>\n\n"
                         f"Инструкции по настройке доступны в главном меню."
                     )
-                    await bot.send_message(chat_id=user_id, text=msg, parse_mode="Markdown")
+                    await bot.send_message(chat_id=user_id, text=msg, parse_mode="HTML")
                 else:
                     await bot.send_message(chat_id=user_id, text="✅ Оплата прошла, но возникла ошибка при создании ключа. Обратитесь в поддержку.")
                     logger.error(f"Failed to create client for payment {payment_id}")
@@ -1026,4 +1207,3 @@ def _build_enot_url(shop_id: str, secret_key: str, amount: float, order_id: str)
 
 def get_user_router() -> Router:
     return user_router
-

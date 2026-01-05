@@ -7,7 +7,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path("/app/project")
+PROJECT_ROOT = Path("/app/project") if Path("/app/project").exists() else Path(".")
 DB_FILE = PROJECT_ROOT / "users.db"
 
 def normalize_host_name(name: str | None) -> str:
@@ -18,6 +18,18 @@ def normalize_host_name(name: str | None) -> str:
     for ch in ("\u00A0", "\u200B", "\u200C", "\u200D", "\uFEFF"):
         s = s.replace(ch, "")
     return s
+
+def mark_trial_used(user_id: int) -> bool:
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET trial_used = 1 WHERE telegram_id = ?", (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logging.error(f"Ошибка при обновлении статуса trial_used для {user_id}: {e}")
+        return False
+
 
 def initialize_db():
     try:

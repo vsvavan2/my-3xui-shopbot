@@ -32,10 +32,16 @@ def encode_host_callback_token(host_name: str) -> str:
 def parse_host_callback_data(data: str) -> tuple[str, str, str] | None:
     if not data or not data.startswith("select_host:"):
         return None
+    # Ожидаем: select_host:{action}:{extra}:{token}
+    # Но split(":", 3) вернет: ['select_host', 'action', 'extra', 'token']
     parts = data.split(":", 3)
-    if len(parts) != 4:
+    if len(parts) < 4:
         return None
-    _, action, extra, token = parts
+    
+    action = parts[1]
+    extra = parts[2]
+    token = parts[3]
+    
     return action, extra or "-", token
 
 
@@ -688,15 +694,6 @@ def create_payment_method_keyboard(
     builder.adjust(1)
     return builder.as_markup()
 
-
-def create_payment_keyboard(pay_url: str) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.button(text="💳 Оплатить", url=pay_url)
-    builder.button(text="🔙 В меню", callback_data="main_menu")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
 def create_admin_promos_menu_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="➕ Создать промокод", callback_data="admin_promo_create")
@@ -817,6 +814,8 @@ def create_ton_connect_keyboard(connect_url: str) -> InlineKeyboardMarkup:
 def create_payment_keyboard(payment_url: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text=(get_setting("btn_go_to_payment") or "Перейти к оплате"), url=payment_url)
+    builder.button(text=(get_setting("btn_back_to_menu") or "⬅️ Назад в меню"), callback_data="main_menu")
+    builder.adjust(1)
     return builder.as_markup()
 
 def create_payment_with_check_keyboard(payment_url: str, check_callback: str) -> InlineKeyboardMarkup:
