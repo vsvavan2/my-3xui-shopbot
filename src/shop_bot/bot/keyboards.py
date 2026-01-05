@@ -689,6 +689,14 @@ def create_payment_method_keyboard(
     return builder.as_markup()
 
 
+def create_payment_keyboard(pay_url: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="💳 Оплатить", url=pay_url)
+    builder.button(text="🔙 В меню", callback_data="main_menu")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def create_admin_promos_menu_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="➕ Создать промокод", callback_data="admin_promo_create")
