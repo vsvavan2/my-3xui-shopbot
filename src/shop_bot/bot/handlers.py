@@ -18,7 +18,7 @@ from shop_bot.data_manager.database import (
     update_transaction_status, update_user_balance,
     get_promo_code, use_promo_code, create_user_key, get_user_keys,
     get_transaction_by_payment_id, get_host_by_name, get_key_by_id, update_key_expiry,
-    register_user_if_not_exists, get_all_hosts, get_plans_for_host, get_hosts_with_plans
+    register_user_if_not_exists, get_all_hosts, get_plans_for_host
 )
 from shop_bot.modules import xui_api
 from shop_bot.bot import keyboards
