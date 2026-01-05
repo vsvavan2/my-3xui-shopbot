@@ -18,10 +18,12 @@ from shop_bot.data_manager.database import (
     update_transaction_status, update_user_balance,
     get_promo_code, use_promo_code, create_user_key, get_user_keys,
     get_transaction_by_payment_id, get_host_by_name, get_key_by_id, update_key_expiry,
-    create_user, get_all_hosts, get_plans_for_host, get_hosts_with_plans
+    register_user_if_not_exists, get_all_hosts, get_plans_for_host, get_hosts_with_plans
 )
-from shop_bot.bot import keyboards
 from shop_bot.modules import xui_api
+from shop_bot.bot import keyboards
+from shop_bot.bot.states import PaymentProcess, TopUpProcess
+
 
 logger = logging.getLogger(__name__)
 user_router = Router()
@@ -31,21 +33,19 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
     user = message.from_user
     
-    # Регистрация пользователя если нет
-    user_data = get_user(user.id)
-    if not user_data:
-        create_user(user.id, user.username, getattr(user, 'first_name', ''), getattr(user, 'last_name', ''))
-        # Проверка рефералки
-        args = message.text.split()
-        if len(args) > 1:
-            try:
-                ref_id = int(args[1])
-                if ref_id != user.id:
-                    # Логика рефералки (упрощенно)
-                    # Можно добавить set_referral если будет функция
-                    pass
-            except ValueError:
-                pass
+    # Определяем реферера
+    referrer_id = None
+    args = message.text.split()
+    if len(args) > 1:
+        try:
+            potential_ref = int(args[1])
+            if potential_ref != user.id:
+                referrer_id = potential_ref
+        except ValueError:
+            pass
+            
+    # Регистрация пользователя (или обновление данных)
+    register_user_if_not_exists(user.id, user.username, referrer_id)
     
     # Приветствие
     welcome_text = get_setting("welcome_message") or "Добро пожаловать в бот продажи VPN!"
@@ -152,8 +152,8 @@ async def select_host_handler(callback: types.CallbackQuery, state: FSMContext):
     builder = InlineKeyboardBuilder()
     for plan in plans:
         builder.button(
-            text=f"{plan['name']} - {plan['price']}₽ ({plan['months']} мес.)", 
-            callback_data=f"select_plan:{plan['id']}"
+            text=f"{plan['plan_name']} - {plan['price']}₽ ({plan['months']} мес.)", 
+            callback_data=f"select_plan:{plan['plan_id']}"
         )
         
     builder.button(text="🔙 Назад", callback_data="buy_new_key")
