@@ -814,6 +814,15 @@
                         </div>
 
                         <div class="mb-3">
+                            <label class="form-label" for="referral_text">Текст реферальной программы</label>
+                            <textarea class="form-control" id="referral_text" name="referral_text" rows="5" placeholder="🤝 <b>Реферальная программа</b>...">{{ settings.referral_text or "" }}</textarea>
+                            <div class="form-hint">
+                                Доступные переменные: <code>{link}</code> (ссылка), <code>{count}</code> (кол-во рефералов), <code>{balance}</code> (баланс).<br>
+                                Поддерживается HTML.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
                             <label class="form-label" for="howto_android_text">Инструкция: Android</label>
                             <textarea class="form-control" id="howto_android_text" name="howto_android_text" rows="8">{{ settings.howto_android_text or "" }}</textarea>
                             <div class="form-hint">Текст, который видит пользователь при выборе инструкции для Android.</div>

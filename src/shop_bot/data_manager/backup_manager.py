@@ -10,10 +10,12 @@ from aiogram.types import FSInputFile
 
 from . import database
 
+from .database import PROJECT_ROOT
+
 logger = logging.getLogger(__name__)
 
 # Папка для хранения локальных архивов бэкапов
-BACKUPS_DIR = Path("/app/project/backups")
+BACKUPS_DIR = PROJECT_ROOT / "backups"
 BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Имя файла БД см. в database.DB_FILE
@@ -22,6 +24,32 @@ DB_FILE: Path = database.DB_FILE
 
 def _timestamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def get_last_backup_time() -> datetime | None:
+    """Возвращает время создания последнего бэкапа или None."""
+    try:
+        files = sorted(BACKUPS_DIR.glob("db-backup-*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if files:
+            return datetime.fromtimestamp(files[0].stat().st_mtime)
+    except Exception:
+        pass
+    return None
+
+
+def delete_all_backups() -> int:
+    """Удаляет все файлы бэкапов. Возвращает количество удаленных файлов."""
+    count = 0
+    try:
+        for f in BACKUPS_DIR.glob("db-backup-*.zip"):
+            try:
+                f.unlink(missing_ok=True)
+                count += 1
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error(f"Бэкап: ошибка при удалении всех бэкапов: {e}")
+    return count
 
 
 def create_backup_file() -> Path | None:

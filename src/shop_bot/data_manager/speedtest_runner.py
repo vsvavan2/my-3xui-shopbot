@@ -465,3 +465,27 @@ async def auto_install_speedtest_on_host(host_name: str) -> dict:
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _install)
+
+
+def run_speedtests_for_all_hosts() -> dict:
+    """
+    Synchronous helper for Flask route: runs speedtests for all hosts sequentially.
+    Uses asyncio.run for each host to avoid requiring a pre-existing event loop in Flask.
+    Returns summary dict with per-host results and aggregated status.
+    """
+    hosts = database.get_all_hosts() or []
+    summary: dict[str, dict] = {}
+    all_ok = True
+    for h in hosts:
+        host_name = h.get('host_name')
+        if not host_name:
+            continue
+        try:
+            res = asyncio.run(run_both_for_host(host_name))
+            summary[host_name] = res
+            if not res.get('ok'):
+                all_ok = False
+        except Exception as e:
+            summary[host_name] = {'ok': False, 'error': str(e)}
+            all_ok = False
+    return {'ok': all_ok, 'results': summary, 'host_count': len(hosts)}

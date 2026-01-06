@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import json
 
@@ -344,9 +344,19 @@ async def _maybe_run_daily_backup(bot: Bot):
     if days <= 0:
         return
     interval_seconds = max(1, days) * 24 * 3600
+
+    # Если в памяти нет даты последнего запуска, попробуем узнать по файлам на диске
+    if _last_backup_run_at is None:
+        last_on_disk = backup_manager.get_last_backup_time()
+        if last_on_disk:
+            _last_backup_run_at = last_on_disk
+
     if _last_backup_run_at and (now - _last_backup_run_at).total_seconds() < interval_seconds:
         return
     try:
+        # Пытаемся обновить время запуска сразу, чтобы не заспамить, если бэкап упадет
+        _last_backup_run_at = now
+        
         zip_path = backup_manager.create_backup_file()
         if zip_path and zip_path.exists():
             try:
@@ -358,7 +368,6 @@ async def _maybe_run_daily_backup(bot: Bot):
                 backup_manager.cleanup_old_backups(keep=7)
             except Exception:
                 pass
-        _last_backup_run_at = now
     except Exception as e:
         logger.error(f"Scheduler: Критическая ошибка при создании и отправке бэкапа: {e}", exc_info=True)
 async def _maybe_collect_host_metrics():

@@ -7,7 +7,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path("/app/project") if Path("/app/project").exists() else Path(".")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 DB_FILE = PROJECT_ROOT / "users.db"
 
 def normalize_host_name(name: str | None) -> str:

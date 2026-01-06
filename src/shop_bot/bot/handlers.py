@@ -544,13 +544,21 @@ async def show_referral_program(callback: types.CallbackQuery):
     ref_count = 0 # TODO: Добавить функцию подсчета рефералов
     ref_balance = user.get('referral_balance', 0)
     
-    text = (
-        f"🤝 <b>Реферальная программа</b>\n\n"
-        f"Приглашайте друзей и получайте бонусы!\n"
-        f"Ваша ссылка:\n<code>{ref_link}</code>\n\n"
-        f"👥 Приглашено: {ref_count}\n"
-        f"💰 Бонусный баланс: {ref_balance} RUB"
-    )
+    # Получаем шаблон текста из настроек или используем дефолтный
+    template = get_setting("referral_text")
+    if not template:
+        template = (
+            "🤝 <b>Реферальная программа</b>\n\n"
+            "Приглашайте друзей и получайте бонусы!\n"
+            "Ваша ссылка:\n<code>{link}</code>\n\n"
+            "👥 Приглашено: {count}\n"
+            "💰 Бонусный баланс: {balance} RUB"
+        )
+    
+    # Заменяем плейсхолдеры
+    text = template.replace("{link}", ref_link)\
+                   .replace("{count}", str(ref_count))\
+                   .replace("{balance}", str(ref_balance))
     
     builder = InlineKeyboardBuilder()
     builder.button(text="🔙 Назад", callback_data="main_menu")
@@ -558,6 +566,7 @@ async def show_referral_program(callback: types.CallbackQuery):
 
 @user_router.callback_query(F.data == "user_speedtest")
 async def run_user_speedtest(callback: types.CallbackQuery):
+    logger.info(f"SPEEDTEST: Handler called by user {callback.from_user.id}")
     try:
         # Получаем список хостов
         hosts = get_all_hosts() or []

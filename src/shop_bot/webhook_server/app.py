@@ -51,7 +51,7 @@ ALL_SETTINGS_KEYS = [
     "panel_login", "panel_password", "about_text", "terms_url", "privacy_url",
     "support_user", "support_text",
     # Editable content from admin UI
-    "main_menu_text", "howto_android_text", "howto_ios_text", "howto_windows_text", "howto_linux_text",
+    "main_menu_text", "referral_text", "howto_android_text", "howto_ios_text", "howto_windows_text", "howto_linux_text",
     # Button texts
     "btn_try", "btn_profile", "btn_my_keys", "btn_buy_key", "btn_top_up", "btn_referral", "btn_support", "btn_about", "btn_howto", "btn_admin", "btn_back_to_menu",
     "btn_channel", "btn_terms", "btn_privacy", "btn_howto_android", "btn_howto_ios", "btn_howto_windows", "btn_howto_linux",
