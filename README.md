@@ -207,3 +207,82 @@ KeyError: 'ContainerConfig'
 1.  Зайдите в **Админ-панель** -> **Настройки** -> **Контент**.
 2.  Проверьте тексты кнопок и разделов.
 3.  Убедитесь, что для нужной функции (например, Speedtest) настроены хосты в разделе **Хосты**.
+
+---
+
+## 🧹 Очистка мусора и бэкапов на Ubuntu
+
+### Где обычно лежат данные проекта
+*   Папка проекта: `/opt/my-3xui-shopbot` или `/home/USER/my-3xui-shopbot`
+    *   Бэкапы: `backups/db-backup-*.zip`
+    *   База: `users.db`
+    *   Служебные: `__pycache__/`, `*.pyc`
+*   Временные файлы speedtest: `/tmp/ookla-speedtest*`, `/tmp/speedtest*`
+*   Логи системы: `/var/log/journal`, `/var/log/*`
+*   Docker артефакты (если использовали): `/var/lib/docker/*`
+*   Кэши:
+    *   pip: `~/.cache/pip`
+    *   APT: `/var/cache/apt`
+
+### Найти и оценить крупные папки
+```bash
+df -h
+sudo du -hxd1 / | sort -hr | head -n 20
+cd /path/to/my-3xui-shopbot
+du -h --max-depth=1 | sort -hr
+```
+
+### Очистка бэкапов проекта
+Удалить все бэкапы:
+```bash
+cd /path/to/my-3xui-shopbot/backups
+ls -lh
+rm -i db-backup-*.zip
+```
+Удалить старше 7 дней:
+```bash
+find /path/to/my-3xui-shopbot/backups -type f -name 'db-backup-*.zip' -mtime +7 -print
+find /path/to/my-3xui-shopbot/backups -type f -name 'db-backup-*.zip' -mtime +7 -delete
+```
+
+### Очистка journald
+```bash
+sudo journalctl --vacuum-time=7d
+# или ограничить размер
+sudo journalctl --vacuum-size=200M
+```
+
+### Очистка APT
+```bash
+sudo apt-get autoremove -y
+sudo apt-get autoclean -y
+sudo apt-get clean -y
+```
+
+### Очистка pip и Python мусора
+```bash
+rm -rf ~/.cache/pip
+cd /path/to/my-3xui-shopbot
+find . -type d -name '__pycache__' -prune -exec rm -rf {} +
+find . -type f -name '*.pyc' -delete
+```
+
+### Очистка /tmp после speedtest
+```bash
+sudo rm -rf /tmp/ookla-speedtest* /tmp/speedtest* 2>/dev/null || true
+```
+
+### Docker (если используется)
+```bash
+docker system df
+docker system prune -af
+docker volume prune -f
+# при необходимости остановить проект
+docker compose down
+```
+
+### Проверка результата
+```bash
+sudo du -hxd1 / | sort -hr | head -n 20
+df -h
+```
