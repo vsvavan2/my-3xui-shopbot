@@ -127,12 +127,29 @@
 *   **Где взять данные**:
     1.  Создайте кошелек.
     2.  Перейдите в [настройки приложений](https://yoomoney.ru/myservices/new).
-    3.  **Redirect URI**: укажите `http://ВАШ_IP_ИЛИ_ДОМЕН:1488/yoomoney/callback`.
+    3.  **Redirect URI**: укажите `https://ВАШ_ДОМЕН/yoomoney/callback` (требуется HTTPS).
+    4.  **Notification URI (Webhook для P2P/QuickPay)**: `https://ВАШ_ДОМЕН/yoomoney-webhook` (для автоматического зачисления входящих платежей).
 *   **В админке**:
     *   `Кошелёк YooMoney`: Номер вашего кошелька (например, 41001...).
     *   `Client ID`: Полученный при регистрации приложения.
-    *   `Redirect URI`: Тот же, что указали в приложении.
+    *   `Client Secret`: Включайте, если в приложении включена проверка подлинности (OAuth client_secret).
+    *   `Redirect URI`: Точно тот же, что указан в приложении (например, `https://ВАШ_ДОМЕН/yoomoney/callback`).
+    *   `Секрет вебхука`: Любая строка для подписи уведомлений QuickPay; будет использоваться на `/yoomoney-webhook`.
     *   После сохранения нажмите кнопку **"Подключить YooMoney"** для авторизации.
+*   **Пошаговая настройка YooMoney (кабинет → админка)**:
+    1.  В кабинете YooMoney заполните поля:
+        - Название: любое (например, Vless)
+        - Адрес сайта: `https://ВАШ_ДОМЕН`
+        - Redirect URI: `https://ВАШ_ДОМЕН/yoomoney/callback`
+        - Notification URI: `https://ВАШ_ДОМЕН/yoomoney-webhook`
+        - Включите проверку client_secret только если хотите хранить `Client Secret` в админке и использовать его при обмене кода на токен.
+    2.  В админ-панели бота: укажите `Client ID`, при необходимости `Client Secret`, `Redirect URI`, кошелёк и секрет вебхука. Нажмите **"Подключить YooMoney"** — откроется страница согласия на yoomoney.ru, после которой YooMoney вернёт параметр `code` на `/yoomoney/callback`, токен сохранится автоматически.
+    3.  Для входящих платежей по кошельку (QuickPay) используйте вебхук `/yoomoney-webhook` — подпись проверяется по вашему секрету, успешные платежи зачисляются.
+*   **Проверка**:
+    *   В админке нажмите **"Проверить YooMoney"** — выполнятся запросы `account-info` и `operation-history`; при валидном токене увидите подтверждение.
+*   **Частые ошибки**:
+    *   Открывать `/yoomoney/callback` напрямую нельзя — он используется только YooMoney для возврата `code`. Сообщение «YooMoney: не получен code из OAuth.» значит, что заход был вручную.
+    *   Используйте HTTPS и домен без порта. Нестандартные порты (например, `:1488`) и `http://` в форме YooMoney обычно не принимаются. Настройте SSL (например, через Nginx+Let’s Encrypt) и проксируйте на локальный сервер.
 
 ### 3. Unitpay
 *   **Регистрация**: [unitpay.ru](https://unitpay.ru/)
@@ -286,3 +303,123 @@ docker compose down
 sudo du -hxd1 / | sort -hr | head -n 20
 df -h
 ```
+
+## 🔒 HTTPS-прокси и YooMoney OAuth
+
+### Задача
+Включить доступ по HTTPS на домене (порт 443) и проксировать веб-кабинет, который работает локально на `http://127.0.0.1:1488`. Это требуется для корректной работы OAuth-колбэков YooMoney.
+
+### Проверка DNS и файрвола
+```bash
+# DNS: A-запись домена vless.24x7.hk должна указывать на ваш сервер (например, 144.124.226.190)
+sudo ufw allow 'Nginx Full'
+sudo ufw status
+```
+
+### Установка Nginx и Certbot
+```bash
+sudo apt-get update
+sudo apt-get install -y nginx certbot python3-certbot-nginx
+sudo systemctl enable --now nginx
+sudo mkdir -p /var/www/html
+```
+
+### Конфигурация сайта (порт 80 и 443)
+Создайте `/etc/nginx/sites-available/vless.24x7.hk`:
+```nginx
+server {
+    listen 80;
+    server_name vless.24x7.hk;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name vless.24x7.hk;
+
+    ssl_certificate     /etc/letsencrypt/live/vless.24x7.hk/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vless.24x7.hk/privkey.pem;
+
+    set $upstream http://127.0.0.1:1488;
+
+    location / {
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+
+    location /yoomoney/callback {
+        proxy_pass $upstream/yoomoney/callback;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+    location /yoomoney-webhook {
+        proxy_pass $upstream/yoomoney-webhook;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+}
+```
+Активируйте сайт и перезагрузите Nginx:
+```bash
+sudo ln -s /etc/nginx/sites-available/vless.24x7.hk /etc/nginx/sites-enabled/vless.24x7.hk
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Выпуск сертификата Let’s Encrypt
+```bash
+sudo certbot --nginx -d vless.24x7.hk --redirect
+sudo nginx -t && sudo systemctl reload nginx
+```
+Проверка, что порты слушаются:
+```bash
+ss -tlnp | grep -E ':80|:443'
+curl -vk https://vless.24x7.hk/
+```
+
+### Проверка локального кабинета на 1488
+```bash
+ss -tlnp | grep ':1488'
+systemctl status shopbot
+```
+Если порт 1488 не слушается — запустите службу бота (см. выше раздел «Инструкция для Ubuntu (Хостинг)»).
+
+### Настройка YooMoney с HTTPS
+Используйте адреса только на домене без порта и с HTTPS:
+* Redirect URI: `https://vless.24x7.hk/yoomoney/callback`
+* Notification URI: `https://vless.24x7.hk/yoomoney-webhook`
+
+В админ-панели заполните:
+* `Client ID` (из регистрации приложения на YooMoney),
+* при необходимости `Client Secret` (если включили проверку подлинности),
+* `Кошелёк`,
+* `Redirect URI`,
+* `Секрет вебхука`.
+Нажмите «Подключить YooMoney» — авторизуйтесь, после редиректа на колбэк токен сохранится.
+
+### Диагностика
+```bash
+sudo nginx -t
+sudo tail -n 200 /var/log/nginx/error.log
+sudo ufw status
+ss -tlnp | grep -E ':80|:443|:1488'
+```
+Правильные примеры curl:
+```bash
+curl -vk https://vless.24x7.hk/
+curl -vk "https://vless.24x7.hk/yoomoney/callback?code=test"
+```
+Если видите `Connection refused` на 443 — сайт не включен, порт закрыт или конфиг/сертификат не применён.
