@@ -435,57 +435,84 @@ async def show_user_keys(callback: types.CallbackQuery):
             await callback.answer("У вас пока нет активных ключей", show_alert=True)
             return
             
-        # Удаляем предыдущее сообщение с меню, чтобы не захламлять чат, или редактируем его
-        # Если ключей много, лучше отправить новые сообщения.
-        # Но если ключей 1-2, можно попробовать редактировать.
-        # Для простоты и надежности, отправим новые, но сначала удалим "старое" меню если получится
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-
-        for key in keys:
-            # Показываем информацию о ключе
-            # key: {'id', 'key_id', 'host_name', 'key_email', 'expiry_time', 'is_active', ...}
-            expiry_ts = key.get('expiry_time')
-            if expiry_ts:
-                expiry = datetime.fromtimestamp(expiry_ts/1000).strftime('%Y-%m-%d %H:%M')
-            else:
-                expiry = "Бессрочно"
-            
-            key_email = key.get('key_email', 'Unknown')
-            host_name = key.get('host_name', 'Unknown')
-            
-            connection_display = key.get('access_url')
-            if not connection_display:
-                try:
-                    details = await xui_api.get_key_details_from_host(key)
-                    if details and details.get('connection_string'):
-                        connection_display = details['connection_string']
-                except Exception:
-                    connection_display = None
-            text = (
-                f"🔑 <b>Ключ:</b> {key_email}\n"
-                f"🌍 <b>Сервер:</b> {host_name}\n"
-                f"⏳ <b>Истекает:</b> {expiry}\n"
-                f"🔗 <code>{connection_display or 'Ссылка недоступна'}</code>"
-            )
-            
-            builder = InlineKeyboardBuilder()
-            # ID ключа в базе данных (key['id']) используется для callback
-            builder.button(text="📅 Продлить", callback_data=f"renew_key:{key['id']}")
-            # Можно добавить кнопку "Инструкция" или "QR код"
-            
-            await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-            
-        # В конце можно добавить кнопку возврата в меню
         builder = InlineKeyboardBuilder()
+        for key in keys:
+            label = f"{key.get('key_email', 'Key')} ({key.get('host_name', 'Host')})"
+            builder.button(text=label, callback_data=f"view_key:{key['id']}")
+        
         builder.button(text="🔙 В меню", callback_data="main_menu")
-        await callback.message.answer("---", reply_markup=builder.as_markup())
+        builder.adjust(1)
+        
+        # Try to edit the message, if fails (e.g. old message), send new one
+        try:
+            await callback.message.edit_text("📂 <b>Ваши ключи:</b>\nВыберите ключ для просмотра информации:", reply_markup=builder.as_markup(), parse_mode="HTML")
+        except Exception:
+            await callback.message.delete()
+            await callback.message.answer("📂 <b>Ваши ключи:</b>\nВыберите ключ для просмотра информации:", reply_markup=builder.as_markup(), parse_mode="HTML")
         
     except Exception as e:
         logger.error(f"Error in show_user_keys: {e}", exc_info=True)
         await callback.answer("Произошла ошибка при загрузке ключей", show_alert=True)
+
+@user_router.callback_query(F.data.startswith("view_key:"))
+async def view_key_handler(callback: types.CallbackQuery):
+    try:
+        key_id = int(callback.data.split(":")[1])
+        key = get_key_by_id(key_id)
+        
+        if not key:
+            await callback.answer("Ключ не найден", show_alert=True)
+            # Refresh list
+            await show_user_keys(callback)
+            return
+
+        # Show loading status while fetching details
+        try:
+            await callback.message.edit_text("⏳ Загрузка данных ключа...", reply_markup=None)
+        except Exception:
+            pass
+
+        try:
+            expiry_ts = key.get('expiry_time')
+            if expiry_ts and isinstance(expiry_ts, (int, float)) and expiry_ts > 0:
+                expiry = datetime.fromtimestamp(expiry_ts/1000).strftime('%Y-%m-%d %H:%M')
+            else:
+                expiry = "Бессрочно"
+        except Exception as e:
+            logger.warning(f"Error parsing expiry for key {key.get('id')}: {e}")
+            expiry = "Неизвестно"
+        
+        key_email = key.get('key_email', 'Unknown')
+        host_name = key.get('host_name', 'Unknown')
+        
+        connection_display = key.get('access_url')
+        if not connection_display:
+            try:
+                details = await xui_api.get_key_details_from_host(key)
+                if details and details.get('connection_string'):
+                    connection_display = details['connection_string']
+            except Exception as e:
+                logger.warning(f"Failed to get key details for key {key.get('id')}: {e}")
+                connection_display = None
+        
+        text = (
+            f"🔑 <b>Ключ:</b> {key_email}\n"
+            f"🌍 <b>Сервер:</b> {host_name}\n"
+            f"⏳ <b>Истекает:</b> {expiry}\n"
+            f"🔗 <code>{connection_display or 'Ссылка недоступна'}</code>"
+        )
+        
+        builder = InlineKeyboardBuilder()
+        builder.button(text="📅 Продлить", callback_data=f"renew_key:{key['id']}")
+        builder.button(text="🔙 К списку ключей", callback_data="manage_keys")
+        builder.button(text="🏠 Главное меню", callback_data="main_menu")
+        builder.adjust(1)
+        
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Error in view_key_handler: {e}", exc_info=True)
+        await callback.answer("Ошибка при отображении ключа", show_alert=True)
 
 @user_router.callback_query(F.data.startswith("renew_key:"))
 async def renew_key_handler(callback: types.CallbackQuery, state: FSMContext):

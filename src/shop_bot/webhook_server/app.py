@@ -261,6 +261,54 @@ def create_webhook_app(bot_controller_instance):
             **common_data
         )
 
+    @flask_app.route('/yoomoney/callback', methods=['GET'])
+    def yoomoney_callback():
+        code = request.args.get('code')
+        error = request.args.get('error')
+        if error:
+            return f"<h3>Ошибка авторизации YooMoney: {error}</h3>"
+        if not code:
+            return "<h3>Код авторизации не получен.</h3>"
+        
+        # Получаем настройки
+        settings = get_all_settings()
+        client_id = settings.get('yoomoney_client_id')
+        redirect_uri = settings.get('yoomoney_redirect_uri') or url_for('yoomoney_callback', _external=True)
+        # client_secret нужен если он был выдан при регистрации
+        client_secret = settings.get('yoomoney_client_secret')
+
+        if not client_id:
+            return "<h3>Ошибка: Не настроен client_id в админ-панели.</h3>"
+
+        # Обмен кода на токен
+        token_url = "https://yoomoney.ru/oauth2/token"
+        data = {
+            "code": code,
+            "client_id": client_id,
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri
+        }
+        if client_secret:
+            data["client_secret"] = client_secret
+
+        try:
+            encoded_data = urllib.parse.urlencode(data).encode('utf-8')
+            req = urllib.request.Request(token_url, data=encoded_data, method='POST')
+            with urllib.request.urlopen(req) as resp:
+                response_data = json.loads(resp.read().decode('utf-8'))
+            
+            access_token = response_data.get('access_token')
+            if access_token:
+                # Сохраняем токен в базу
+                update_setting('yoomoney_api_token', access_token)
+                # Можно также перенаправить обратно в админку
+                return redirect(url_for('dashboard_page') + "?tab=payments#payments")
+            else:
+                return f"<h3>Ошибка получения токена: {response_data.get('error')}</h3>"
+        except Exception as e:
+            logger.error(f"YooMoney token exchange error: {e}")
+            return f"<h3>Произошла ошибка при обмене кода на токен: {e}</h3>"
+
     @flask_app.route('/dashboard/run-speedtests', methods=['POST'])
     @login_required
     def run_speedtests_route():

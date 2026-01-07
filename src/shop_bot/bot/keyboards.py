@@ -238,7 +238,7 @@ def create_main_menu_keyboard(user_keys: list, trial_available: bool, is_admin: 
                         text = text.replace('{count}', str(len(user_keys))).replace('((count))', f'({len(user_keys)})')
                     except Exception:
                         pass
-
+                
                 # Исключаем дубликаты по button_id
                 if button_id:
                     if button_id in added_buttons:
@@ -332,7 +332,10 @@ def create_main_menu_keyboard(user_keys: list, trial_available: bool, is_admin: 
     builder.button(text=(get_setting("btn_support") or "🆘 Поддержка"), callback_data="show_help")
     builder.button(text=(get_setting("btn_about") or "ℹ️ О проекте"), callback_data="show_about")
     builder.button(text=(get_setting("btn_howto") or "❓ Как использовать"), callback_data="howto_vless")
-    builder.button(text=(get_setting("btn_speed") or "⚡ Тест скорости"), callback_data="user_speedtest")
+    
+    speed_text = get_setting("btn_speed") or "⚡ Тест скорости"
+    builder.button(text=speed_text, callback_data="user_speedtest")
+
     if is_admin:
         builder.button(text=(get_setting("btn_admin") or "⚙️ Админка"), callback_data="admin_menu")
 
