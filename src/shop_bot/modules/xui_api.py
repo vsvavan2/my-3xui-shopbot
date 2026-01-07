@@ -245,7 +245,7 @@ async def get_key_details_from_host(key_data: dict) -> dict | None:
     try:
         if inbound.settings and inbound.settings.clients:
             for client in inbound.settings.clients:
-                if getattr(client, "id", None) == key_data['xui_client_uuid'] or getattr(client, "email", None) == key_data.get('email'):
+                if getattr(client, "id", None) == key_data['xui_client_uuid'] or getattr(client, "email", None) == key_data.get('key_email'):
                     candidate_fields = ("subId", "subscription", "sub_id", "subscriptionId", "subscription_token")
                     for attr in candidate_fields:
                         val = None

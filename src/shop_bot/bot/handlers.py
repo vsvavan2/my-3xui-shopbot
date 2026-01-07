@@ -437,8 +437,8 @@ async def show_user_keys(callback: types.CallbackQuery):
             
         builder = InlineKeyboardBuilder()
         for key in keys:
-            label = f"{key.get('key_email', 'Key')} ({key.get('host_name', 'Host')})"
-            builder.button(text=label, callback_data=f"view_key:{key['id']}")
+                    label = f"{key.get('key_email', 'Key')} ({key.get('host_name', 'Host')})"
+                    builder.button(text=label, callback_data=f"view_key:{key['key_id']}")
         
         builder.button(text="🔙 В меню", callback_data="main_menu")
         builder.adjust(1)
@@ -479,7 +479,7 @@ async def view_key_handler(callback: types.CallbackQuery):
             else:
                 expiry = "Бессрочно"
         except Exception as e:
-            logger.warning(f"Error parsing expiry for key {key.get('id')}: {e}")
+            logger.warning(f"Error parsing expiry for key {key.get('key_id')}: {e}")
             expiry = "Неизвестно"
         
         key_email = key.get('key_email', 'Unknown')
@@ -492,7 +492,7 @@ async def view_key_handler(callback: types.CallbackQuery):
                 if details and details.get('connection_string'):
                     connection_display = details['connection_string']
             except Exception as e:
-                logger.warning(f"Failed to get key details for key {key.get('id')}: {e}")
+                logger.warning(f"Failed to get key details for key {key.get('key_id')}: {e}")
                 connection_display = None
         
         text = (
@@ -503,7 +503,7 @@ async def view_key_handler(callback: types.CallbackQuery):
         )
         
         builder = InlineKeyboardBuilder()
-        builder.button(text="📅 Продлить", callback_data=f"renew_key:{key['id']}")
+        builder.button(text="📅 Продлить", callback_data=f"renew_key:{key['key_id']}")
         builder.button(text="🔙 К списку ключей", callback_data="manage_keys")
         builder.button(text="🏠 Главное меню", callback_data="main_menu")
         builder.adjust(1)
