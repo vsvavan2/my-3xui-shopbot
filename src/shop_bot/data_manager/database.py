@@ -717,6 +717,29 @@ def run_migration():
                 logging.info(" -> Столбец 'message_thread_id' успешно добавлен в 'support_tickets'.")
             else:
                 logging.info(" -> Столбец 'message_thread_id' уже существует в 'support_tickets'.")
+
+        logging.info("Миграция таблицы 'vpn_keys' ...")
+        cursor.execute("PRAGMA table_info(vpn_keys)")
+        vpn_keys_columns = [row[1] for row in cursor.fetchall()]
+        
+        if 'email' in vpn_keys_columns and 'key_email' not in vpn_keys_columns:
+            logging.info("Migrating 'email' column to 'key_email'...")
+            cursor.execute("ALTER TABLE vpn_keys RENAME COLUMN email TO key_email")
+            logging.info("Column renamed.")
+            
+        if 'uuid' in vpn_keys_columns and 'xui_client_uuid' not in vpn_keys_columns:
+            logging.info("Migrating 'uuid' column to 'xui_client_uuid'...")
+            cursor.execute("ALTER TABLE vpn_keys RENAME COLUMN uuid TO xui_client_uuid")
+            logging.info("Column renamed.")
+
+        # Cleanup "Function in development" settings
+        cursor.execute("SELECT key, value FROM bot_settings WHERE value LIKE '%Функция в разработке%'")
+        bad_settings = cursor.fetchall()
+        if bad_settings:
+            logging.info("Cleaning up placeholder settings...")
+            for key, val in bad_settings:
+                cursor.execute("DELETE FROM bot_settings WHERE key = ?", (key,))
+                logging.info(f"Deleted setting {key}")
         else:
             logging.warning("Таблица 'support_tickets' не найдена, пропускаю её миграцию.")
 
