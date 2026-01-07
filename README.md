@@ -1,427 +1,64 @@
-# 3X-ui-ShopBot | Telegram-бот для продажи VPN
-
-<div align="center">
-    <a href="#установка-и-обновление">Установка и обновление</a> •
-    <a href="#настройка">Настройка</a> •
-    <a href="#поддержка">Поддержка</a>
-</div>
-
-**3X-ui-ShopBot** — это мощный инструмент для автоматизации продаж VLESS-конфигураций. Бот интегрируется с панелью **3x-ui** и предоставляет пользователям удобный интерфейс для покупки, продления и управления подписками.
-
-## 🚀 Основные возможности
-
-*   **Автоматизация продаж**: Выдача ключей, прием оплаты, продление подписок.
-*   **Веб-панель администратора**: Удобное управление пользователями, серверами, тарифами и настройками бота.
-*   **Мульти-серверность**: Поддержка множества серверов 3x-ui (балансировка и выбор локаций).
-*   **Платежные шлюзы**: YooKassa, YooMoney, Unitpay, FreeKassa, CryptoBot, Telegram Stars.
-*   **Реферальная система**: Настраиваемые бонусы за приглашение друзей.
-*   **Тест скорости**: Встроенная функция проверки скорости соединения на серверах.
-*   **Техподдержка**: Система тикетов внутри бота.
-*   **Рассылки**: Отправка сообщений всем пользователям.
-
----
-
-## 🛠 Установка и запуск
-
-### Предварительные требования
-*   **Python 3.10** или выше.
-*   **Git**.
-
-### Инструкция для Windows (Локальный запуск)
-
-1.  **Склонируйте репозиторий** (если еще не сделали):
-    ```powershell
-    git clone https://github.com/vsvavan2/my-3xui-shopbot.git
-    cd my-3xui-shopbot
-    ```
-
-2.  **Создайте виртуальное окружение**:
-    ```powershell
-    # Находясь в корне проекта (где лежит requirements.txt)
-    python -m venv .venv
-    ```
-
-3.  **Активируйте виртуальное окружение**:
-    ```powershell
-    .\.venv\Scripts\Activate
-    ```
-
-4.  **Установите зависимости**:
-    ```powershell
-    pip install -r requirements.txt
-    ```
-
-5.  **Настройка окружения**:
-    *   Убедитесь, что у вас есть файл `.env` (или создайте его на основе `.env.example`).
-    *   Основные настройки (токен бота, ID админа) хранятся в базе данных `users.db`, но первичные настройки можно задать в `.env`.
-
-6.  **Запуск бота**:
-    ```powershell
-    # Из корня проекта
-    $env:PYTHONPATH="src"
-    python -m shop_bot
-    ```
-
-### Инструкция для Ubuntu (Хостинг)
-
-1.  **Обновите пакеты и установите Python/Git**:
-    ```bash
-    sudo apt update && sudo apt install python3 python3-venv python3-pip git -y
-    ```
-
-2.  **Склонируйте репозиторий**:
-    ```bash
-    git clone https://github.com/vsvavan2/my-3xui-shopbot.git
-    cd my-3xui-shopbot
-    ```
-
-3.  **Создайте и активируйте venv**:
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
-
-4.  **Установите зависимости**:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-5.  **Запуск (через systemd рекомендуется для продакшена)**:
-    Создайте файл службы: `/etc/systemd/system/shopbot.service`
-    ```ini
-    [Unit]
-    Description=3x-ui Shop Bot
-    After=network.target
-
-    [Service]
-    User=root
-    WorkingDirectory=/path/to/my-3xui-shopbot
-    Environment="PYTHONPATH=/path/to/my-3xui-shopbot/src"
-    ExecStart=/path/to/my-3xui-shopbot/.venv/bin/python -m shop_bot
-    Restart=always
-
-    [Install]
-    WantedBy=multi-user.target
-    ```
-    Затем выполните:
-    ```bash
-    sudo systemctl enable shopbot
-    sudo systemctl start shopbot
-    ```
-
----
-
-## 💳 Настройка платежных систем
-
-Все настройки платежей производятся в веб-панели: раздел **Настройки** -> **Платежи**.
-
-### 1. YooKassa (ЮKassa)
-*   **Регистрация**: [yookassa.ru](https://yookassa.ru/)
-*   **Где взять данные**: Личный кабинет ➜ Настройки ➜ Магазин ➜ Ключи API.
-*   **В админке**:
-    *   `Shop ID`: Ваш ID магазина.
-    *   `Secret Key`: Секретный ключ API.
-
-### 2. YooMoney (ЮMoney) — для физлиц
-*   **Регистрация**: [yoomoney.ru](https://yoomoney.ru/)
-*   **Где взять данные**:
-    1.  Создайте кошелек.
-    2.  Перейдите в [настройки приложений](https://yoomoney.ru/myservices/new).
-    3.  **Redirect URI**: укажите `https://vless.24x7.hk/yoomoney/callback` (требуется HTTPS, без порта!).
-    4.  **Notification URI (Webhook для P2P/QuickPay)**: `https://vless.24x7.hk/yoomoney-webhook` (для автоматического зачисления входящих платежей).
-*   **В админке**:
-    *   `Кошелёк YooMoney`: Номер вашего кошелька (например, 41001...).
-    *   `Client ID`: Полученный при регистрации приложения.
-    *   `Client Secret`: Включайте, если в приложении включена проверка подлинности (OAuth client_secret).
-    *   `Redirect URI`: Точно тот же, что указан в приложении (`https://vless.24x7.hk/yoomoney/callback`).
-    *   `Секрет вебхука`: Любая строка для подписи уведомлений QuickPay; будет использоваться на `/yoomoney-webhook`.
-    *   После сохранения нажмите кнопку **"Подключить YooMoney"** для авторизации.
-*   **Пошаговая настройка YooMoney (кабинет → админка)**:
-    1.  В кабинете YooMoney заполните поля:
-        - Название: любое (например, Vless)
-        - Адрес сайта: `https://vless.24x7.hk`
-        - Redirect URI: `https://vless.24x7.hk/yoomoney/callback`
-        - Notification URI: `https://vless.24x7.hk/yoomoney-webhook`
-        - Включите проверку client_secret только если хотите хранить `Client Secret` в админке.
-    2.  В админ-панели бота: укажите `Client ID`, при необходимости `Client Secret`, `Redirect URI`, кошелёк и секрет вебхука. Нажмите **"Подключить YooMoney"** — откроется страница согласия на yoomoney.ru, после которой YooMoney вернёт параметр `code` на `/yoomoney/callback`, токен сохранится автоматически.
-    3.  Для входящих платежей по кошельку (QuickPay) используйте вебхук `/yoomoney-webhook` — подпись проверяется по вашему секрету, успешные платежи зачисляются.
-*   **Проверка**:
-    *   В админке нажмите **"Проверить YooMoney"** — выполнятся запросы `account-info` и `operation-history`; при валидном токене увидите подтверждение.
-*   **Частые ошибки**:
-    *   Открывать `/yoomoney/callback` напрямую нельзя — он используется только YooMoney для возврата `code`. Сообщение «YooMoney: не получен code из OAuth.» значит, что заход был вручную.
-    *   Используйте HTTPS и домен без порта. Нестандартные порты (например, `:1488`) и `http://` в форме YooMoney обычно не принимаются. Настройте SSL (например, через Nginx+Let’s Encrypt) и проксируйте на локальный сервер.
-
-### 3. Unitpay
-*   **Регистрация**: [unitpay.ru](https://unitpay.ru/)
-*   **Где взять данные**: Личный кабинет ➜ Проект ➜ Настройки.
-*   **В админке**:
-    *   `Public Key`: Публичный ключ проекта.
-    *   `Secret Key`: Секретный ключ (Secret Key).
-
-### 4. FreeKassa
-*   **Регистрация**: [freekassa.ru](https://freekassa.ru/)
-*   **Где взять данные**: Личный кабинет ➜ Настройки ➜ API.
-*   **В админке**:
-    *   `Merchant ID`: ID вашего магазина.
-    *   `Secret Word 1`: Секретное слово 1.
-    *   `Secret Word 2`: Секретное слово 2.
-
-### 5. CryptoBot
-*   **Регистрация**: Откройте [@CryptoBot](https://t.me/CryptoBot) в Telegram.
-*   **Где взять данные**:
-    1.  Напишите `/start`.
-    2.  Перейдите в **Crypto Pay** ➜ **Create App**.
-    3.  Получите **API Token**.
-*   **В админке**:
-    *   `CryptoBot Token`: Вставьте полученный токен.
-
-### 6. Telegram Stars
-*   **Регистрация**: Через [@BotFather](https://t.me/BotFather).
-*   **Где взять данные**:
-    1.  Выберите своего бота.
-    2.  Перейдите в **Payments**.
-    3.  Выберите провайдера (для Telegram Stars это встроенная функция).
-*   **В админке**:
-    *   Включите опцию `Enable Telegram Stars` (если доступна).
-
----
-
-## ❓ Решение частых проблем (FAQ)
-
-### 1. Ошибка Docker: `KeyError: 'ContainerConfig'`
-Если при запуске через Docker вы видите ошибку:
-```
-KeyError: 'ContainerConfig'
-```
-Это означает, что у вас установлена устаревшая версия `docker-compose` (например, 1.29.2), которая не совместима с новыми параметрами контейнеров.
-
-**Решение:**
-Вам нужно обновить `docker-compose` до версии v2.
-
-**Для Ubuntu:**
-1.  Удалите старый docker-compose:
-    ```bash
-    sudo apt-get remove docker-compose
-    ```
-2.  Установите Docker Compose v2 (как плагин для Docker CLI):
-    ```bash
-    sudo apt-get update
-    sudo apt-get install docker-compose-plugin
-    ```
-3.  Проверьте версию:
-    ```bash
-    docker compose version
-    # Должно быть что-то вроде: Docker Compose version v2.x.x
-    ```
-4.  Запускайте проект новой командой (без дефиса):
-    ```bash
-    docker compose up -d --build
-    ```
-
-### 2. Ошибка "Функция в разработке" в боте
-Если при нажатии на кнопку вы видите это сообщение:
-1.  Зайдите в **Админ-панель** -> **Настройки** -> **Контент**.
-2.  Проверьте тексты кнопок и разделов.
-3.  Если вы недавно обновляли бота, текст "Функция в разработке" мог остаться в базе данных как значение по умолчанию. Просто измените его в админке на нужное.
-
-### 3. Редактирование текста "Приглашайте друзей..."
-Текст реферальной программы можно изменить в **Админ-панель** -> **Настройки** -> **Контент** -> **Текст реферальной программы**.
-
----
-
-## 🧹 Очистка мусора и бэкапов на Ubuntu
-
-### Где обычно лежат данные проекта
-*   Папка проекта: `/opt/my-3xui-shopbot` или `/home/USER/my-3xui-shopbot`
-    *   Бэкапы: `backups/db-backup-*.zip`
-    *   База: `users.db`
-    *   Служебные: `__pycache__/`, `*.pyc`
-*   Временные файлы speedtest: `/tmp/ookla-speedtest*`, `/tmp/speedtest*`
-*   Логи системы: `/var/log/journal`, `/var/log/*`
-*   Docker артефакты (если использовали): `/var/lib/docker/*`
-*   Кэши:
-    *   pip: `~/.cache/pip`
-    *   APT: `/var/cache/apt`
-
-### Найти и оценить крупные папки
-```bash
-df -h
-sudo du -hxd1 / | sort -hr | head -n 20
-cd /path/to/my-3xui-shopbot
-du -h --max-depth=1 | sort -hr
-```
-
-### Очистка бэкапов проекта
-Удалить все бэкапы:
-```bash
-cd /path/to/my-3xui-shopbot/backups
-ls -lh
-rm -i db-backup-*.zip
-```
-Удалить старше 7 дней:
-```bash
-find /path/to/my-3xui-shopbot/backups -type f -name 'db-backup-*.zip' -mtime +7 -print
-find /path/to/my-3xui-shopbot/backups -type f -name 'db-backup-*.zip' -mtime +7 -delete
-```
-
-### Очистка journald
-```bash
-sudo journalctl --vacuum-time=7d
-# или ограничить размер
-sudo journalctl --vacuum-size=200M
-```
-
-### Очистка APT
-```bash
-sudo apt-get autoremove -y
-sudo apt-get autoclean -y
-sudo apt-get clean -y
-```
-
-### Очистка pip и Python мусора
-```bash
-rm -rf ~/.cache/pip
-cd /path/to/my-3xui-shopbot
-find . -type d -name '__pycache__' -prune -exec rm -rf {} +
-find . -type f -name '*.pyc' -delete
-```
-
-### Очистка /tmp после speedtest
-```bash
-sudo rm -rf /tmp/ookla-speedtest* /tmp/speedtest* 2>/dev/null || true
-```
-
-### Docker (если используется)
-```bash
-docker system df
-docker system prune -af
-docker volume prune -f
-# при необходимости остановить проект
-docker compose down
-```
-
-### Проверка результата
-```bash
-sudo du -hxd1 / | sort -hr | head -n 20
-df -h
-```
-
-## 🔒 HTTPS-прокси и YooMoney OAuth
-
-### Задача
-Включить доступ по HTTPS на домене (порт 443) и проксировать веб-кабинет, который работает локально на `http://127.0.0.1:1488`. Это требуется для корректной работы OAuth-колбэков YooMoney.
-
-### Проверка DNS и файрвола
-```bash
-# DNS: A-запись домена vless.24x7.hk должна указывать на ваш сервер
-sudo ufw allow 'Nginx Full'
-sudo ufw status
-```
-
-### Установка Nginx и Certbot
-```bash
-sudo apt-get update
-sudo apt-get install -y nginx certbot python3-certbot-nginx
-sudo systemctl enable --now nginx
-sudo mkdir -p /var/www/html
-```
-
-### Конфигурация сайта (порт 80 и 443)
-Создайте `/etc/nginx/sites-available/vless.24x7.hk`:
-```nginx
-server {
-    listen 80;
-    server_name vless.24x7.hk;
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name vless.24x7.hk;
-
-    ssl_certificate     /etc/letsencrypt/live/vless.24x7.hk/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/vless.24x7.hk/privkey.pem;
-
-    set $upstream http://127.0.0.1:1488;
-
-    location / {
-        proxy_pass $upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Host $host;
-    }
-
-    location /yoomoney/callback {
-        proxy_pass $upstream/yoomoney/callback;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Host $host;
-    }
-    location /yoomoney-webhook {
-        proxy_pass $upstream/yoomoney-webhook;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Host $host;
-    }
-}
-```
-Активируйте сайт и перезагрузите Nginx:
-```bash
-sudo ln -s /etc/nginx/sites-available/vless.24x7.hk /etc/nginx/sites-enabled/vless.24x7.hk
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### Выпуск сертификата Let’s Encrypt
-```bash
-sudo certbot --nginx -d vless.24x7.hk --redirect
-sudo nginx -t && sudo systemctl reload nginx
-```
-Проверка, что порты слушаются:
-```bash
-ss -tlnp | grep -E ':80|:443'
-curl -vk https://vless.24x7.hk/
-```
-
-### Проверка локального кабинета на 1488
-```bash
-ss -tlnp | grep ':1488'
-systemctl status shopbot
-```
-Если порт 1488 не слушается — запустите службу бота (см. выше раздел «Инструкция для Ubuntu (Хостинг)»).
-
-### Настройка YooMoney с HTTPS
-Используйте адреса только на домене без порта и с HTTPS:
-* Redirect URI: `https://vless.24x7.hk/yoomoney/callback`
-* Notification URI: `https://vless.24x7.hk/yoomoney-webhook`
-
-В админ-панели заполните:
-* `Client ID` (из регистрации приложения на YooMoney),
-* при необходимости `Client Secret` (если включили проверку подлинности),
-* `Кошелёк`,
-* `Redirect URI`,
-* `Секрет вебхука`.
-Нажмите «Подключить YooMoney» — авторизуйтесь, после редиректа на колбэк токен сохранится.
-
-### Диагностика
-```bash
-sudo nginx -t
-sudo tail -n 200 /var/log/nginx/error.log
-sudo ufw status
-ss -tlnp | grep -E ':80|:443|:1488'
-```
-Правильные примеры curl:
-```bash
-curl -vk https://vless.24x7.hk/
-curl -vk "https://vless.24x7.hk/yoomoney/callback?code=test"
-```
-Если видите `Connection refused` на 443 — сайт не включен, порт закрыт или конфиг/сертификат не применён.
+# 3x-ui Shop Bot
+
+Telegram bot for selling VPN keys (VLESS) from the 3x-ui panel.
+
+## Features
+- 🛒 Auto-sale of keys via YooMoney, YooKassa, UnitPay, FreeKassa, Enot.io
+- 💰 Balance system, referral program, promo codes
+- 📊 Admin panel (Web UI) for management
+- 🌍 Support for multiple 3x-ui servers
+- 🚀 Speed test display (from 3x-ui metrics)
+- 📝 Technical support via forum topics
+
+## Installation (Docker Compose) - Recommended
+
+1. **Prerequisites**: Docker & Docker Compose installed.
+2. **Clone repo**:
+   ```bash
+   git clone <repo_url>
+   cd 3xui-shopbot-main
+   ```
+3. **Configure**:
+   - Edit `docker-compose.yml` if needed (ports, volumes).
+   - Ensure `nginx_vless.conf` has your domain `vless.24x7.hk`.
+
+4. **Run**:
+   ```bash
+   docker compose up -d --build
+   ```
+
+5. **Access Admin Panel**:
+   - Open `http://your-server-ip:1488` (or your domain if configured).
+   - Default login/pass: `admin` / `admin`.
+
+## Payment Setup (YooMoney)
+
+1. **Register/Login** to [YooMoney](https://yoomoney.ru).
+2. **Get Client ID (for OAuth - optional)**:
+   - Only needed if you want automatic token issuing.
+   - Redirect URI: `https://vless.24x7.hk/yoomoney/callback`
+3. **HTTP Notifications (REQUIRED for auto-payments)**:
+   - Go to YooMoney Settings -> HTTP Notifications.
+   - URL: `https://vless.24x7.hk/yoomoney-webhook`
+   - Secret: Copy the secret and paste it into Bot Admin Panel -> Settings -> Payment Systems -> YooMoney Secret.
+
+## Troubleshooting
+
+### "My Keys" Error
+Fixed in latest version. Update `src/shop_bot/bot/handlers.py`.
+
+### SSL Error (ERR_CERT_COMMON_NAME_INVALID)
+Your server's SSL certificate does not match `vless.24x7.hk`.
+- If using Nginx Proxy Manager, request a new Let's Encrypt cert for this specific domain.
+- If using manual Certbot: `certbot --nginx -d vless.24x7.hk`.
+
+### 404 Not Found on Webhook
+- Ensure you deployed the latest code (check `src/shop_bot/webhook_server/app.py`).
+- Use the correct URL: `/yoomoney-webhook` (NOT `/yoomoney/callback` for payments).
+
+## Development (Local)
+
+1. Create venv: `python -m venv .venv`
+2. Activate: `.\.venv\Scripts\Activate` (Windows) or `source .venv/bin/activate` (Linux)
+3. Install: `pip install -r requirements.txt`
+4. Run: `python -m shop_bot`
