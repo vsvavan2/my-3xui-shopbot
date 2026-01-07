@@ -1945,81 +1945,7 @@ def create_webhook_app(bot_controller_instance):
             logger.error(f"Ошибка в обработчике вебхука TonAPI: {e}", exc_info=True)
             return 'Error', 500
 
-    @csrf.exempt
-    @flask_app.route('/yoomoney-webhook', methods=['POST'])
-    def yoomoney_webhook_handler():
-        try:
-            # YooMoney sends form-urlencoded data (application/x-www-form-urlencoded)
-            data = request.form
-            
-            notification_type = data.get('notification_type')
-            operation_id = data.get('operation_id')
-            amount = data.get('amount')
-            currency = data.get('currency')
-            datetime_str = data.get('datetime')
-            sender = data.get('sender')
-            codepro = data.get('codepro')
-            label = data.get('label')
-            sha1_hash = data.get('sha1_hash')
-            
-            if not label:
-                # Если нет label, мы не знаем какой это платеж
-                logger.warning("YooMoney Webhook: отсутствует label (payment_id). Пропуск.")
-                return 'OK', 200 
 
-            # Проверка подписи (если задан секрет)
-            secret = (get_setting("yoomoney_secret") or "").strip()
-            if secret:
-                # Порядок полей для хеша:
-                # notification_type & operation_id & amount & currency & datetime & sender & codepro & notification_secret & label
-                check_str = f"{notification_type}&{operation_id}&{amount}&{currency}&{datetime_str}&{sender}&{codepro}&{secret}&{label}"
-                expected_hash = hashlib.sha1(check_str.encode('utf-8')).hexdigest()
-                
-                if expected_hash != sha1_hash:
-                    logger.warning(f"YooMoney Webhook: Неверная подпись. Ожидалась {expected_hash}, получена {sha1_hash}")
-                    return 'Forbidden', 403
-            else:
-                logger.warning("YooMoney Webhook: Секретное слово не задано, проверка подписи пропущена (небезопасно).")
-            
-            # Обработка платежа
-            try:
-                amount_val = float(amount)
-            except Exception:
-                amount_val = 0.0
-                
-            # Ищем транзакцию по label (payment_id)
-            # find_and_complete_pending_transaction сама обновит статус и вернет metadata
-            # Нужно импортировать find_and_complete_pending_transaction, если её нет в глобальном неймспейсе app.py
-            # В начале файла: from shop_bot.data_manager.database import ...
-            # Проверим imports. Если нет, используем database.find_and_complete_pending_transaction
-            
-            from shop_bot.data_manager.database import find_and_complete_pending_transaction
-            
-            metadata = find_and_complete_pending_transaction(
-                payment_id=label,
-                amount_rub=amount_val,
-                payment_method='YooMoney'
-            )
-            
-            if metadata:
-                logger.info(f"YooMoney: Платеж {label} успешно обработан.")
-                
-                bot = _bot_controller.get_bot_instance()
-                payment_processor = handlers.process_successful_payment
-                loop = current_app.config.get('EVENT_LOOP')
-
-                if bot and loop and loop.is_running():
-                    asyncio.run_coroutine_threadsafe(payment_processor(bot, metadata), loop)
-                else:
-                    logger.error("YooMoney Webhook: Не удается запустить обработчик (bot/loop недоступен).")
-            else:
-                logger.warning(f"YooMoney Webhook: Транзакция {label} не найдена или уже оплачена.")
-                
-            return 'OK', 200
-            
-        except Exception as e:
-            logger.error(f"Ошибка в обработчике вебхука YooMoney: {e}", exc_info=True)
-            return 'Error', 500
 
     # --- YooMoney OAuth integration ---
     def _ym_get_redirect_uri():
@@ -2231,58 +2157,7 @@ def create_webhook_app(bot_controller_instance):
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
-    # --- YooMoney Webhook ---
-    @csrf.exempt
-    @flask_app.route('/yoomoney-webhook', methods=['POST'])
-    def yoomoney_webhook_handler():
-        """ЮMoney HTTP уведомление (кнопка/ссылка p2p)."""
-        logger.info("🔔 Получен webhook от ЮMoney")
-        try:
-            form = request.form
-            if form.get('codepro') == 'true':
-                return 'OK', 200
-            
-            secret = get_setting('yoomoney_secret') or ''
-            signature_str = "&".join([
-                form.get('notification_type',''), form.get('operation_id',''),
-                form.get('amount',''), form.get('currency',''),
-                form.get('datetime',''), form.get('sender',''),
-                form.get('codepro',''), secret, form.get('label','')
-            ])
-            
-            import hashlib
-            expected_signature = hashlib.sha1(signature_str.encode('utf-8')).hexdigest()
-            if not compare_digest(expected_signature, form.get('sha1_hash', '')):
-                logger.warning("YooMoney webhook: неверная подпись")
-                return 'Forbidden', 403
-            
-            if form.get('notification_type') == 'p2p-incoming':
-                amount = float(form.get('amount', 0))
-                label = form.get('label', '')
-                logger.info(f"YooMoney payment: {amount} RUB, label: {label}")
-                
-                try:
-                    bot = _bot_controller.get_bot_instance()
-                    if bot:
-                        from shop_bot.data_manager.database import get_transaction_by_payment_id
-                        from shop_bot.bot.handlers import process_successful_payment
-                        
-                        tx = get_transaction_by_payment_id(label)
-                        if tx:
-                            metadata = tx.get('metadata', {})
-                            metadata['amount'] = amount
-                            loop = current_app.config.get('EVENT_LOOP')
-                            if loop and loop.is_running():
-                                asyncio.run_coroutine_threadsafe(process_successful_payment(bot, metadata), loop)
-                        else:
-                            logger.warning(f"YooMoney: транзакция {label} не найдена")
-                except Exception as e:
-                    logger.error(f"YooMoney notify error: {e}")
-            
-            return 'OK', 200
-        except Exception as e:
-            logger.error(f"YooMoney webhook error: {e}", exc_info=True)
-            return 'Error', 500
+
 
     # --- Unitpay Webhook ---
     @csrf.exempt
