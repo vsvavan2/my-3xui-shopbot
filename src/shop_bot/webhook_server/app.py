@@ -35,7 +35,7 @@ from shop_bot.data_manager.database import (
     create_host, delete_host, create_plan, delete_plan, update_plan, get_user_count,
     get_total_keys_count, get_total_spent_sum, get_daily_stats_for_charts,
     get_recent_transactions, get_paginated_transactions, get_all_users, get_user_keys,
-    ban_user, unban_user, delete_user_keys, get_setting, find_and_complete_ton_transaction,
+    ban_user, unban_user, delete_user_keys, get_setting, find_and_complete_ton_transaction, find_and_complete_pending_transaction,
     get_tickets_paginated, get_open_tickets_count, get_ticket, get_ticket_messages,
     add_support_message, set_ticket_status, delete_ticket,
     get_closed_tickets_count, get_all_tickets_count, update_host_subscription_url,
@@ -1781,6 +1781,98 @@ def create_webhook_app(bot_controller_instance):
             return 'Error', 500
         
     @csrf.exempt
+    @flask_app.route('/yoomoney-webhook', methods=['POST'])
+    def yoomoney_webhook_handler():
+        """
+        Обработчик HTTP-уведомлений от YooMoney.
+        Ожидает p2p-incoming (перевод на кошелек).
+        """
+        try:
+            # Данные приходят в формате x-www-form-urlencoded
+            data = request.form.to_dict()
+            logger.info(f"Получен вебхук YooMoney: {data}")
+
+            notification_type = data.get('notification_type')
+            if notification_type != 'p2p-incoming':
+                # Обрабатываем только входящие переводы
+                return 'OK', 200
+
+            # Проверка SHA-1 хэша (если задан секрет)
+            secret = get_setting("yoomoney_secret")  # Секретное слово из настроек
+            sha1_hash = data.get('sha1_hash')
+            
+            if secret and sha1_hash:
+                # Строка для хэширования:
+                # notification_type&operation_id&amount&currency&datetime&sender&codepro&notification_secret&label
+                # Важно: параметры должны быть именно в таком порядке
+                
+                amount = data.get('amount', '')
+                currency = data.get('currency', '')
+                operation_id = data.get('operation_id', '')
+                event_datetime = data.get('datetime', '')
+                sender = data.get('sender', '')
+                codepro = data.get('codepro', '')
+                label = data.get('label', '')
+                
+                # Формируем строку
+                validation_string = f"{notification_type}&{operation_id}&{amount}&{currency}&{event_datetime}&{sender}&{codepro}&{secret}&{label}"
+                
+                # Вычисляем хэш
+                calculated_hash = hashlib.sha1(validation_string.encode('utf-8')).hexdigest()
+                
+                if calculated_hash != sha1_hash:
+                    logger.warning(f"YooMoney webhook: неверный хэш! Получен: {sha1_hash}, ожидал: {calculated_hash}")
+                    return 'Hash Error', 400
+            elif secret and not sha1_hash:
+                 logger.warning("YooMoney webhook: секрет задан, но хэш не пришел")
+                 return 'Hash Error', 400
+
+            # label = payment_id
+            payment_id = data.get('label')
+            if not payment_id:
+                logger.warning("YooMoney webhook: отсутствует label (payment_id)")
+                return 'OK', 200
+
+            # unaccepted = true, если перевод заморожен (код протекции и т.д.)
+            # Обычно для автоплатежей unaccepted=false
+            if data.get('unaccepted') == 'true':
+                 logger.warning(f"YooMoney webhook: платёж {payment_id} заморожен (unaccepted=true)")
+                 return 'OK', 200
+
+            # 1. Находим транзакцию в БД и помечаем как paid
+            # Сумма приходит в amount (сколько списали у отправителя) и withdraw_amount (сколько зачислили нам)
+            # Обычно проверяем withdraw_amount
+            withdraw_amount = float(data.get('withdraw_amount') or 0.0)
+            
+            # Обновляем статус в БД и получаем метаданные
+            metadata = find_and_complete_pending_transaction(
+                payment_id=payment_id,
+                amount_rub=withdraw_amount,
+                payment_method='YooMoney'
+            )
+
+            if not metadata:
+                logger.warning(f"YooMoney webhook: транзакция {payment_id} не найдена или уже обработана")
+                return 'OK', 200
+            
+            # 2. Зачисляем средства пользователю / выдаем ключ
+            bot = _bot_controller.get_bot_instance()
+            loop = current_app.config.get('EVENT_LOOP')
+            payment_processor = handlers.process_successful_payment
+
+            if bot and loop and loop.is_running():
+                asyncio.run_coroutine_threadsafe(payment_processor(bot, metadata), loop)
+                logger.info(f"YooMoney webhook: платёж {payment_id} успешно обработан")
+            else:
+                logger.error("YooMoney webhook: бот или цикл событий не запущены")
+
+            return 'OK', 200
+
+        except Exception as e:
+            logger.error(f"Ошибка в обработчике вебхука YooMoney: {e}", exc_info=True)
+            return 'Error', 500
+
+    @csrf.exempt
     @flask_app.route('/heleket-webhook', methods=['POST'])
     def heleket_webhook_handler():
         try:
@@ -1851,6 +1943,82 @@ def create_webhook_app(bot_controller_instance):
             return 'OK', 200
         except Exception as e:
             logger.error(f"Ошибка в обработчике вебхука TonAPI: {e}", exc_info=True)
+            return 'Error', 500
+
+    @csrf.exempt
+    @flask_app.route('/yoomoney-webhook', methods=['POST'])
+    def yoomoney_webhook_handler():
+        try:
+            # YooMoney sends form-urlencoded data (application/x-www-form-urlencoded)
+            data = request.form
+            
+            notification_type = data.get('notification_type')
+            operation_id = data.get('operation_id')
+            amount = data.get('amount')
+            currency = data.get('currency')
+            datetime_str = data.get('datetime')
+            sender = data.get('sender')
+            codepro = data.get('codepro')
+            label = data.get('label')
+            sha1_hash = data.get('sha1_hash')
+            
+            if not label:
+                # Если нет label, мы не знаем какой это платеж
+                logger.warning("YooMoney Webhook: отсутствует label (payment_id). Пропуск.")
+                return 'OK', 200 
+
+            # Проверка подписи (если задан секрет)
+            secret = (get_setting("yoomoney_secret") or "").strip()
+            if secret:
+                # Порядок полей для хеша:
+                # notification_type & operation_id & amount & currency & datetime & sender & codepro & notification_secret & label
+                check_str = f"{notification_type}&{operation_id}&{amount}&{currency}&{datetime_str}&{sender}&{codepro}&{secret}&{label}"
+                expected_hash = hashlib.sha1(check_str.encode('utf-8')).hexdigest()
+                
+                if expected_hash != sha1_hash:
+                    logger.warning(f"YooMoney Webhook: Неверная подпись. Ожидалась {expected_hash}, получена {sha1_hash}")
+                    return 'Forbidden', 403
+            else:
+                logger.warning("YooMoney Webhook: Секретное слово не задано, проверка подписи пропущена (небезопасно).")
+            
+            # Обработка платежа
+            try:
+                amount_val = float(amount)
+            except Exception:
+                amount_val = 0.0
+                
+            # Ищем транзакцию по label (payment_id)
+            # find_and_complete_pending_transaction сама обновит статус и вернет metadata
+            # Нужно импортировать find_and_complete_pending_transaction, если её нет в глобальном неймспейсе app.py
+            # В начале файла: from shop_bot.data_manager.database import ...
+            # Проверим imports. Если нет, используем database.find_and_complete_pending_transaction
+            
+            from shop_bot.data_manager.database import find_and_complete_pending_transaction
+            
+            metadata = find_and_complete_pending_transaction(
+                payment_id=label,
+                amount_rub=amount_val,
+                payment_method='YooMoney'
+            )
+            
+            if metadata:
+                logger.info(f"YooMoney: Платеж {label} успешно обработан.")
+                
+                bot = _bot_controller.get_bot_instance()
+                payment_processor = handlers.process_successful_payment
+                loop = current_app.config.get('EVENT_LOOP')
+
+                if bot and loop and loop.is_running():
+                    asyncio.run_coroutine_threadsafe(payment_processor(bot, metadata), loop)
+                else:
+                    logger.error("YooMoney Webhook: Не удается запустить обработчик (bot/loop недоступен).")
+            else:
+                logger.warning(f"YooMoney Webhook: Транзакция {label} не найдена или уже оплачена.")
+                
+            return 'OK', 200
+            
+        except Exception as e:
+            logger.error(f"Ошибка в обработчике вебхука YooMoney: {e}", exc_info=True)
             return 'Error', 500
 
     # --- YooMoney OAuth integration ---
