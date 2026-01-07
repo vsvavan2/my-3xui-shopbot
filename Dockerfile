@@ -3,6 +3,7 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 RUN python3 -m venv .venv
 ENV PATH="/app/.venv/bin:$PATH"
+RUN pip install --upgrade pip
 COPY . /app/project/
 WORKDIR /app/project
 RUN pip install --no-cache-dir -e .

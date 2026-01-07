@@ -268,7 +268,7 @@ def create_webhook_app(bot_controller_instance):
         if error:
             return f"<h3>Ошибка авторизации YooMoney: {error}</h3>"
         if not code:
-            return "<h3>Код авторизации не получен.</h3>"
+            return f"<h3>Код авторизации не получен.</h3><p>Debug Info:</p><p>URL: {request.url}</p><p>Args: {request.args}</p>"
         
         # Получаем настройки
         settings = get_all_settings()
