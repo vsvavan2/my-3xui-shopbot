@@ -1,64 +1,168 @@
-# 3x-ui Shop Bot
+# 🤖 Telegram Bot для продажи VLESS VPN (3x-ui)
 
-Telegram bot for selling VPN keys (VLESS) from the 3x-ui panel.
+Мощный и функциональный бот для автоматической продажи VPN-ключей, работающий в связке с панелью 3x-ui (XRAY). Включает в себя веб-админку, поддержку множества платежных систем, реферальную программу и систему технической поддержки.
 
-## Features
-- 🛒 Auto-sale of keys via YooMoney, YooKassa, UnitPay, FreeKassa, Enot.io
-- 💰 Balance system, referral program, promo codes
-- 📊 Admin panel (Web UI) for management
-- 🌍 Support for multiple 3x-ui servers
-- 🚀 Speed test display (from 3x-ui metrics)
-- 📝 Technical support via forum topics
+## ✨ Основные возможности
 
-## Installation (Docker Compose) - Recommended
+### 🛒 Продажа и Управление
+*   **Автоматическая выдача ключей**: VLESS ключи создаются мгновенно после оплаты.
+*   **Мульти-серверность**: Поддержка нескольких серверов 3x-ui.
+*   **Личный кабинет**: Просмотр купленных ключей, продление, инструкции по подключению (Android, iOS, Windows, Linux).
+*   **Тест скорости**: Отображение загруженности серверов (ping, upload/download) для пользователей.
+*   **Пробный период**: Настраиваемый триал для новых пользователей.
 
-1. **Prerequisites**: Docker & Docker Compose installed.
-2. **Clone repo**:
-   ```bash
-   git clone <repo_url>
-   cd 3xui-shopbot-main
-   ```
-3. **Configure**:
-   - Edit `docker-compose.yml` if needed (ports, volumes).
-   - Ensure `nginx_vless.conf` has your domain `vless.24x7.hk`.
+### 💳 Платежные системы
+*   **ЮMoney (YooMoney)**: Прямая интеграция (P2P и OAuth) и через HTTP-уведомления.
+*   **Telegram Stars**: Прием оплаты внутренней валютой Telegram.
+*   **YooKassa, UnitPay, FreeKassa, Enot.io**: Поддержка популярных агрегаторов.
+*   **Криптовалюты**: Через CryptoBot (опционально).
 
-4. **Run**:
-   ```bash
-   docker compose up -d --build
-   ```
+### 👥 Маркетинг и Лояльность
+*   **Реферальная программа**: Начисления % от покупок приглашенных друзей.
+*   **Промокоды**: Скидки (процентные или фиксированные) и бонусные дни.
+*   **Рассылки**: Отправка сообщений всем пользователям через админку.
 
-5. **Access Admin Panel**:
-   - Open `http://your-server-ip:1488` (or your domain if configured).
-   - Default login/pass: `admin` / `admin`.
+### ⚙️ Админ-панель (Web UI)
+*   Удобный веб-интерфейс по адресу `http://ваш-ip:1488`.
+*   Управление пользователями (баланс, блокировка, просмотр покупок).
+*   Управление ключами и серверами.
+*   Настройка тарифов и цен.
+*   Обработка тикетов поддержки.
+*   Просмотр статистики и логов.
 
-## Payment Setup (YooMoney)
+---
 
-1. **Register/Login** to [YooMoney](https://yoomoney.ru).
-2. **Get Client ID (for OAuth - optional)**:
-   - Only needed if you want automatic token issuing.
-   - Redirect URI: `https://vless.24x7.hk/yoomoney/callback`
-3. **HTTP Notifications (REQUIRED for auto-payments)**:
-   - Go to YooMoney Settings -> HTTP Notifications.
-   - URL: `https://vless.24x7.hk/yoomoney-webhook`
-   - Secret: Copy the secret and paste it into Bot Admin Panel -> Settings -> Payment Systems -> YooMoney Secret.
+## 🚀 Установка и Запуск (Docker) - Рекомендуется
 
-## Troubleshooting
+Это самый простой способ запуска на сервере (Ubuntu/Debian).
 
-### "My Keys" Error
-Fixed in latest version. Update `src/shop_bot/bot/handlers.py`.
+### 1. Подготовка
+Убедитесь, что установлены `docker` и `docker-compose`.
 
-### SSL Error (ERR_CERT_COMMON_NAME_INVALID)
-Your server's SSL certificate does not match `vless.24x7.hk`.
-- If using Nginx Proxy Manager, request a new Let's Encrypt cert for this specific domain.
-- If using manual Certbot: `certbot --nginx -d vless.24x7.hk`.
+```bash
+sudo apt update
+sudo apt install docker.io docker-compose -y
+```
 
-### 404 Not Found on Webhook
-- Ensure you deployed the latest code (check `src/shop_bot/webhook_server/app.py`).
-- Use the correct URL: `/yoomoney-webhook` (NOT `/yoomoney/callback` for payments).
+### 2. Загрузка проекта
+Склонируйте репозиторий:
 
-## Development (Local)
+```bash
+git clone https://github.com/ваш-юзернейм/3xui-shopbot.git
+cd 3xui-shopbot/3xui-shopbot-main
+```
 
-1. Create venv: `python -m venv .venv`
-2. Activate: `.\.venv\Scripts\Activate` (Windows) or `source .venv/bin/activate` (Linux)
-3. Install: `pip install -r requirements.txt`
-4. Run: `python -m shop_bot`
+### 3. Настройка
+1.  Отредактируйте `docker-compose.yml` если нужно сменить порты.
+2.  Настройте Nginx (файл `nginx_vless.conf`) для работы по HTTPS (см. раздел Nginx).
+
+### 4. Запуск
+```bash
+sudo docker-compose up -d --build
+```
+
+После запуска:
+*   **Бот**: Начнет отвечать в Telegram.
+*   **Админка**: Доступна по адресу `http://ip-сервера:1488`.
+    *   **Логин**: `admin`
+    *   **Пароль**: `admin` (Смените в настройках!)
+
+### 🔄 Обновление
+Чтобы обновить проект без ошибок:
+
+```bash
+# Остановка и очистка старых контейнеров
+sudo docker-compose down --rmi all --remove-orphans
+
+# Получение свежего кода
+git pull
+
+# Запуск
+sudo docker-compose up -d --build
+```
+
+---
+
+## 🛠 Ручная установка (для разработки)
+
+Если вы хотите запустить проект локально или без Docker.
+
+1.  **Python**: Требуется Python 3.10+.
+2.  **Виртуальное окружение**:
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate  # Linux/Mac
+    .venv\Scripts\Activate     # Windows
+    ```
+3.  **Зависимости**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  **Запуск**:
+    ```bash
+    python -m src.shop_bot
+    ```
+
+---
+
+## 🌐 Настройка Nginx (HTTPS)
+
+Для корректной работы вебхуков (YooMoney) и безопасного доступа к админке рекомендуется использовать Nginx с SSL.
+
+Пример конфига (`/etc/nginx/sites-available/default` или `vless.conf`):
+
+```nginx
+server {
+    listen 80;
+    server_name vless.24x7.hk;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name vless.24x7.hk;
+
+    ssl_certificate /etc/letsencrypt/live/vless.24x7.hk/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vless.24x7.hk/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:1488;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+---
+
+## 💰 Настройка ЮMoney (YooMoney)
+
+1.  Зарегистрируйте приложение на [yoomoney.ru/myservices/new](https://yoomoney.ru/myservices/new).
+    *   **Название**: Название вашего бота.
+    *   **Сайт**: `https://vless.24x7.hk`
+    *   **Redirect URI**: `https://vless.24x7.hk/yoomoney/callback`
+2.  Включите **HTTP-уведомления** в настройках кошелька ЮMoney.
+    *   **URL**: `https://vless.24x7.hk/yoomoney-webhook`
+3.  В Админ-панели бота (Настройки -> Платежи):
+    *   Введите `Client ID` (из п.1).
+    *   Нажмите "Авторизовать" или введите токен вручную.
+    *   Укажите "Секретное слово" для уведомлений (из п.2).
+
+---
+
+## 🆘 Решение проблем
+
+### Ошибка `ContainerConfig` в Docker
+Если при обновлении вы видите `KeyError: 'ContainerConfig'`, выполните полную очистку:
+```bash
+sudo docker-compose down --rmi all --remove-orphans
+sudo docker-compose up -d --build
+```
+
+### Ошибка 404 на Webhook
+Убедитесь, что в Nginx прописан `proxy_pass` на порт `1488`. Если вы видите страницу "404. That’s an error.", возможно, домен направлен не на тот сервер.
+
+### База данных
+Файл базы данных `users.db` создается автоматически в корне проекта. Миграции применяются автоматически при запуске.

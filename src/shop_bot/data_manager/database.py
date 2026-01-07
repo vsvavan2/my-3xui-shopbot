@@ -19,6 +19,46 @@ def normalize_host_name(name: str | None) -> str:
         s = s.replace(ch, "")
     return s
 
+def fix_database():
+    """Автоматическое исправление базы данных (миграции и очистка)."""
+    try:
+        logging.info(f"Checking database at {DB_FILE}...")
+        if not DB_FILE.exists():
+            return
+
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            
+            # 1. Check vpn_keys schema
+            cursor.execute("PRAGMA table_info(vpn_keys)")
+            columns = [info[1] for info in cursor.fetchall()]
+            
+            if 'email' in columns and 'key_email' not in columns:
+                logging.info("Migrating 'email' column to 'key_email'...")
+                cursor.execute("ALTER TABLE vpn_keys RENAME COLUMN email TO key_email")
+                conn.commit()
+            
+            if 'uuid' in columns and 'xui_client_uuid' not in columns:
+                 logging.info("Migrating 'uuid' column to 'xui_client_uuid'...")
+                 cursor.execute("ALTER TABLE vpn_keys RENAME COLUMN uuid TO xui_client_uuid")
+                 conn.commit()
+
+            # 2. Reset button configs (чтобы обновились меню)
+            cursor.execute("DELETE FROM button_configs")
+            conn.commit()
+            
+            # 3. Remove legacy "Function in development" settings
+            cursor.execute("SELECT key, value FROM bot_settings WHERE value LIKE '%Функция в разработке%'")
+            bad_settings = cursor.fetchall()
+            for key, val in bad_settings:
+                cursor.execute("DELETE FROM bot_settings WHERE key = ?", (key,))
+            conn.commit()
+            
+            logging.info("Database fix/migration completed.")
+            
+    except Exception as e:
+        logging.error(f"Error in fix_database: {e}")
+
 def mark_trial_used(user_id: int) -> bool:
     try:
         with sqlite3.connect(DB_FILE) as conn:
@@ -318,6 +358,9 @@ def initialize_db():
             logging.info("База данных успешно инициализирована.")
     except sqlite3.Error as e:
         logging.error(f"Ошибка базы данных при инициализации: {e}")
+
+    # Run automatic fix/migration
+    fix_database()
 
 # --- Promo codes API (unified) ---
 def _promo_columns(conn: sqlite3.Connection) -> set[str]:
