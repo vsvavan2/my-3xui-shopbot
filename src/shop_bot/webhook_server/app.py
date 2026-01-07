@@ -281,7 +281,7 @@ def create_webhook_app(bot_controller_instance):
             return "<h3>Ошибка: Не настроен client_id в админ-панели.</h3>"
 
         # Обмен кода на токен
-        token_url = "https://yoomoney.ru/oauth2/token"
+        token_url = "https://yoomoney.ru/oauth/token"
         data = {
             "code": code,
             "client_id": client_id,
