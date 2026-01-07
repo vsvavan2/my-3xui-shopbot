@@ -16,6 +16,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 import secrets
 import urllib.parse
 import urllib.request
+from werkzeug.middleware.proxy_fix import ProxyFix
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
@@ -116,6 +117,7 @@ def create_webhook_app(bot_controller_instance):
         template_folder='templates',
         static_folder='static'
     )
+    flask_app.wsgi_app = ProxyFix(flask_app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
     
     # SECRET_KEY из окружения или сгенерированный на лету (без хардкода)
     flask_app.config['SECRET_KEY'] = os.getenv('SHOPBOT_SECRET_KEY') or secrets.token_hex(32)
@@ -2235,5 +2237,4 @@ def create_webhook_app(bot_controller_instance):
             return 'Error', 500
 
     return flask_app
-
 
