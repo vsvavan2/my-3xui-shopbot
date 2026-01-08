@@ -131,12 +131,12 @@ def main():
                 loop.add_signal_handler(sig, lambda sig=sig: asyncio.create_task(shutdown(sig, loop)))
         
         flask_thread = threading.Thread(
-            target=lambda: flask_app.run(host='0.0.0.0', port=1488, use_reloader=False, debug=False),
+            target=lambda: flask_app.run(host='0.0.0.0', port=1489, use_reloader=False, debug=False),
             daemon=True
         )
         flask_thread.start()
         
-        logger.info("Flask-сервер запущен: http://0.0.0.0:1488")
+        logger.info("Flask-сервер запущен: http://0.0.0.0:1489")
             
         logger.info("Приложение запущено. Бота можно стартовать из веб-панели.")
         

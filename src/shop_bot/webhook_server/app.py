@@ -128,6 +128,10 @@ def create_webhook_app(bot_controller_instance):
     csrf = CSRFProtect()
     csrf.init_app(flask_app)
 
+    @flask_app.before_request
+    def log_request_info():
+        print(f"REQUEST: {request.method} {request.url}", flush=True)
+
     @flask_app.context_processor
     def inject_current_year():
         # Добавляем csrf_token в шаблоны для meta и скрытых полей
@@ -1787,18 +1791,36 @@ def create_webhook_app(bot_controller_instance):
         Обработчик HTTP-уведомлений от YooMoney.
         Ожидает p2p-incoming (перевод на кошелек).
         """
+        log_file = os.path.join(os.getcwd(), "webhook_debug.log")
         try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write("\n--- YooMoney Webhook Triggered ---\n")
+            
+            print("--- YooMoney Webhook Triggered ---", flush=True)
             # Данные приходят в формате x-www-form-urlencoded
             data = request.form.to_dict()
+            
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"Webhook Data: {data}\n")
+
+            print(f"Webhook Data: {data}")
             logger.info(f"Получен вебхук YooMoney: {data}")
 
             notification_type = data.get('notification_type')
             if notification_type != 'p2p-incoming':
                 # Обрабатываем только входящие переводы
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(f"Skipping notification type: {notification_type}\n")
+                print(f"Skipping notification type: {notification_type}", flush=True)
                 return 'OK', 200
 
             # Проверка SHA-1 хэша (если задан секрет)
             secret = get_setting("yoomoney_secret")  # Секретное слово из настроек
+            
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"Secret from settings: {secret}\n")
+            print(f"Secret from settings: {secret}", flush=True)
+            
             sha1_hash = data.get('sha1_hash')
             
             if secret and sha1_hash:
@@ -1817,26 +1839,46 @@ def create_webhook_app(bot_controller_instance):
                 # Формируем строку
                 validation_string = f"{notification_type}&{operation_id}&{amount}&{currency}&{event_datetime}&{sender}&{codepro}&{secret}&{label}"
                 
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(f"Validation string: {validation_string}\n")
+                print(f"Validation string: {validation_string}", flush=True)
+            
                 # Вычисляем хэш
                 calculated_hash = hashlib.sha1(validation_string.encode('utf-8')).hexdigest()
                 
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(f"Calculated Hash: {calculated_hash}, Received Hash: {sha1_hash}\n")
+                print(f"Calculated Hash: {calculated_hash}, Received Hash: {sha1_hash}", flush=True)
+                
                 if calculated_hash != sha1_hash:
                     logger.warning(f"YooMoney webhook: неверный хэш! Получен: {sha1_hash}, ожидал: {calculated_hash}")
+                    with open(log_file, "a", encoding="utf-8") as f:
+                        f.write("Hash Mismatch!\n")
+                    print("Hash Mismatch!", flush=True)
                     return 'Hash Error', 400
             elif secret and not sha1_hash:
-                 logger.warning("YooMoney webhook: секрет задан, но хэш не пришел")
-                 return 'Hash Error', 400
+                logger.warning("YooMoney webhook: секрет задан, но хэш не пришел")
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write("Secret set but no hash received\n")
+                print("Secret set but no hash received", flush=True)
+                return 'Hash Error', 400
 
             # label = payment_id
             payment_id = data.get('label')
             if not payment_id:
                 logger.warning("YooMoney webhook: отсутствует label (payment_id)")
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write("No payment_id (label)\n")
+                print("No payment_id (label)", flush=True)
                 return 'OK', 200
 
             # unaccepted = true, если перевод заморожен (код протекции и т.д.)
             # Обычно для автоплатежей unaccepted=false
             if data.get('unaccepted') == 'true':
                  logger.warning(f"YooMoney webhook: платёж {payment_id} заморожен (unaccepted=true)")
+                 with open(log_file, "a", encoding="utf-8") as f:
+                     f.write("Payment unaccepted\n")
+                 print("Payment unaccepted", flush=True)
                  return 'OK', 200
 
             # 1. Находим транзакцию в БД и помечаем как paid
@@ -1844,31 +1886,58 @@ def create_webhook_app(bot_controller_instance):
             # Обычно проверяем withdraw_amount
             withdraw_amount = float(data.get('withdraw_amount') or 0.0)
             
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"Withdraw Amount: {withdraw_amount}\n")
+            print(f"Withdraw Amount: {withdraw_amount}", flush=True)
+            
             # Обновляем статус в БД и получаем метаданные
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"Calling find_and_complete_pending_transaction for {payment_id}...\n")
+            print(f"Calling find_and_complete_pending_transaction for {payment_id}...", flush=True)
+            
             metadata = find_and_complete_pending_transaction(
                 payment_id=payment_id,
                 amount_rub=withdraw_amount,
                 payment_method='YooMoney'
             )
+            
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"Metadata returned: {metadata}\n")
+            print(f"Metadata returned: {metadata}", flush=True)
 
             if not metadata:
                 logger.warning(f"YooMoney webhook: транзакция {payment_id} не найдена или уже обработана")
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write("Transaction not found or already processed\n")
+                print("Transaction not found or already processed", flush=True)
                 return 'OK', 200
             
             # 2. Зачисляем средства пользователю / выдаем ключ
             bot = _bot_controller.get_bot_instance()
             loop = current_app.config.get('EVENT_LOOP')
             payment_processor = handlers.process_successful_payment
+            
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"Bot: {bot}, Loop: {loop}, Loop Running: {loop.is_running() if loop else 'N/A'}\n")
+            print(f"Bot: {bot}, Loop: {loop}, Loop Running: {loop.is_running() if loop else 'N/A'}", flush=True)
 
             if bot and loop and loop.is_running():
                 asyncio.run_coroutine_threadsafe(payment_processor(bot, metadata), loop)
                 logger.info(f"YooMoney webhook: платёж {payment_id} успешно обработан")
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write("Payment processor scheduled\n")
+                print("Payment processor scheduled", flush=True)
             else:
                 logger.error("YooMoney webhook: бот или цикл событий не запущены")
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write("Bot or loop not running\n")
+                print("Bot or loop not running", flush=True)
 
             return 'OK', 200
 
         except Exception as e:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"ERROR: {e}\n")
             logger.error(f"Ошибка в обработчике вебхука YooMoney: {e}", exc_info=True)
             return 'Error', 500
 
@@ -2326,6 +2395,10 @@ def create_webhook_app(bot_controller_instance):
         except Exception as e:
             logger.error(f"Enot.io webhook error: {e}", exc_info=True)
             return 'Error', 500
+
+    print("--- REGISTERED ROUTES ---", flush=True)
+    print(flask_app.url_map, flush=True)
+    print("--- END ROUTES ---", flush=True)
 
     return flask_app
 
