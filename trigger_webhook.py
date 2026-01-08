@@ -2,7 +2,7 @@ import requests
 import hashlib
 
 def trigger():
-    url = "http://127.0.0.1:1489/yoomoney-webhook"
+    url = "http://127.0.0.1:1488/yoomoney-webhook"
     
     # Parameters
     notification_type = "p2p-incoming"

@@ -8,3 +8,11 @@ Withdraw Amount: 0.0
 Calling find_and_complete_pending_transaction for test_payment_local...
 Metadata returned: None
 Transaction not found or already processed
+
+--- YooMoney Webhook Triggered ---
+Webhook Data: {}
+Skipping notification type: None
+
+--- YooMoney Webhook Triggered ---
+Webhook Data: {}
+Skipping notification type: None
