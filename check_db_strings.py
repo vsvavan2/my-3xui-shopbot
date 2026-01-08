@@ -35,7 +35,7 @@ def search_db():
     found = False
     for table in tables:
         table_name = table[0]
-        # print(f"Checking table: {table_name}")
+        print(f"Checking table: {table_name}")
         try:
             cursor.execute(f"SELECT * FROM {table_name}")
             rows = cursor.fetchall()

@@ -1,0 +1,4 @@
+Script started.
+Database path: d:\Бекап\01 Сайт\0 Vless\[wlux.net]Скрипт Telegram бот для автоматической продажи VLESS VPN из панели 3x-ui\3xui-shopbot-mainNew\3xui-shopbot-main\users.db
+Querying transactions...
+Transaction found: (None, 1, 'test_payment_local', 1, 'pending', 100.0, None, None, None, None, '2026-01-07 22:11:01')

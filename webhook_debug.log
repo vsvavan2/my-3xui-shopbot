@@ -1,0 +1,10 @@
+
+--- YooMoney Webhook Triggered ---
+Webhook Data: {'notification_type': 'p2p-incoming', 'operation_id': '1234567890', 'amount': '100.00', 'currency': '643', 'datetime': '2024-01-01T00:00:00Z', 'sender': '410010000000000', 'codepro': 'false', 'label': 'test_payment_local', 'sha1_hash': 'c0f2bb870adb33795ce599c86ea147e2173ecf13', 'test_notification': 'true', 'unaccepted': 'false'}
+Secret from settings: 9dm+vyGtCMEKh9RLIeADIl6J
+Validation string: p2p-incoming&1234567890&100.00&643&2024-01-01T00:00:00Z&410010000000000&false&9dm+vyGtCMEKh9RLIeADIl6J&test_payment_local
+Calculated Hash: c0f2bb870adb33795ce599c86ea147e2173ecf13, Received Hash: c0f2bb870adb33795ce599c86ea147e2173ecf13
+Withdraw Amount: 0.0
+Calling find_and_complete_pending_transaction for test_payment_local...
+Metadata returned: None
+Transaction not found or already processed
