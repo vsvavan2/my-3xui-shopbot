@@ -2269,7 +2269,7 @@ def create_webhook_app(bot_controller_instance):
             
             if received_signature != expected_signature:
                 logger.warning(f"Unitpay: неверная подпись. Exp: {expected_signature}, Rec: {received_signature}")
-                # return jsonify({'error': {'message': 'Invalid signature'}}), 200 
+                return jsonify({'error': {'message': 'Invalid signature'}}), 200 
             
             if method == 'check':
                 return jsonify({'result': {'message': 'Ready'}}), 200
@@ -2327,7 +2327,7 @@ def create_webhook_app(bot_controller_instance):
             
             if sign != expected_sign:
                 logger.warning("Freekassa: неверная подпись")
-                return 'YES', 200 
+                return 'Forbidden', 403 
             
             logger.info(f"Freekassa payment: {amount}, order: {merchant_order_id}")
             
