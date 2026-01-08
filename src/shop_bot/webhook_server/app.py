@@ -1807,8 +1807,8 @@ def create_webhook_app(bot_controller_instance):
             logger.info(f"Получен вебхук YooMoney: {data}")
 
             notification_type = data.get('notification_type')
-            if notification_type != 'p2p-incoming':
-                # Обрабатываем только входящие переводы
+            allowed_types = ('p2p-incoming', 'card-incoming')
+            if notification_type not in allowed_types:
                 with open(log_file, "a", encoding="utf-8") as f:
                     f.write(f"Skipping notification type: {notification_type}\n")
                 print(f"Skipping notification type: {notification_type}", flush=True)
@@ -2401,4 +2401,3 @@ def create_webhook_app(bot_controller_instance):
     print("--- END ROUTES ---", flush=True)
 
     return flask_app
-
